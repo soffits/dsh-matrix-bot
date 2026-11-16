@@ -7,3 +7,4 @@
 - The send service cannot remove a reaction (it would need to find and redact the bot's own reaction event).
 - Not tested against a server that expires access tokens: the re-login on the same device after `M_UNKNOWN_TOKEN` has no test.
 - After the bot's data is lost, its old device stays signed in on the server; the owner signs it out in the account's device list.
+- There is no release workflow yet, although the Git section of AGENTS.md describes one; the first npm publish is done by hand.
