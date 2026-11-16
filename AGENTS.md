@@ -4,11 +4,18 @@ A DeepSeek Harness (DSH) plugin that lets people talk to DSH sessions over Matri
 
 ## Layout
 
-To be filled in by the first build (`src/` modules and what each owns).
+- `index.js` → `src/app.js`: the bot row (`matrix-bot`). `createBridge(ctx, config, connect)` holds the runtime: the connection's lifecycle, incoming events (invites, messages, reactions, Space changes), dispatch to sessions, the `matrixRooms` service and the spool. `apply` passes the real `connect`; tests pass a fake (`test/fake.js`).
+- `src/matrix.js`: everything that talks to the homeserver through `@vector-im/matrix-bot-sdk`: password login and `session.json`, the sync and crypto stores, encryption setup (cross-signing, secret storage, recovery key, key backup), a clean stop, and the small call surface the rest uses.
+- `src/spaces.js`: each person's Space and lobby, adopting their own Space, joining rooms that appear in it, `!new` rooms, and publishing the command list (MSC4332, MSC4391).
+- `src/turns.js`: turn delivery, streaming by edits, typing notices. `src/outbound.js`: message, edit, file and reaction content. `src/reactions.js`: working reactions.
+- `src/prompts.js`: approvals and questions answered by reply or reaction. `src/commands.js` and `src/controls.js`: room commands.
+- `src/inbound.js`: one Matrix message → prompt text, attachments and reply context. `src/sender.js`: the `matrix-user` principal and the sender notice (from soffits/dsh-telegram-bot).
+- `src/sessions.js`, `src/models.js`, `src/voice.js`, `src/helpers.js`, `src/titles.js`, `src/spool.js`, `src/state.js`, `src/operations.js`: shared with soffits/dsh-deltachat-bot, adapted to rooms; keep them in step where the logic is the same.
+- `tools.js`: the `matrix-bot-tools` row (`matrix_send`). `bin/dsh-matrix.js`: the command line. `scripts/e2e.js`: the real bot against a local Tuwunel.
 
 ## Checks
 
-`npm test` (tests point `DSH_HOME` at a temp directory and never touch a live harness), `npm run check`.
+`npm test` (tests point `DSH_HOME` at a temp directory and never touch a live harness), `npm run check`. `npm run e2e` runs the real bot, a fake DSH Host and an encrypted client against a throwaway Tuwunel; run it after an SDK or crypto update or a change in login, encryption, Spaces or sending (CI runs it on dependency changes and by hand).
 
 ## Working on the project
 
