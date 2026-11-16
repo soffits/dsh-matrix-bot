@@ -1,5 +1,5 @@
 /**
- * Model selection for chats. The session's live agent owns its model
+ * Model selection for rooms. The session's live agent owns its model
  * (`agent.model.current()`); the bot keeps no copy of it. Lists come from the
  * same catalog as the Web model picker (`sessionController.modelCatalog()`),
  * so every configured provider and model shows with its Web display name.

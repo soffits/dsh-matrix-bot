@@ -1,14 +1,8 @@
 /**
- * A fake DSH Host and a fake Delta Chat core for the bridge tests. This file
- * has no tests of its own.
+ * A fake DSH Host and a fake Matrix connection for the bridge tests. This
+ * file has no tests of its own.
  */
-import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
-import { createFingerprints } from '../src/core.js'
-import { vcardFingerprint } from '../src/identity.js'
-
-export const TESTER_VCARD = readFileSync(new URL('./fixture.vcf', import.meta.url), 'utf8')
-export const TESTER_FINGERPRINT = vcardFingerprint(TESTER_VCARD)
 
 /** Wait until queued promise work has run. */
 export function settle(ms = 30) {
@@ -29,106 +23,156 @@ export async function until(check, what = 'condition', attempts = 200) {
   throw new Error(`timed out waiting for ${what}`)
 }
 
-/** A tiny event emitter shaped like the jsonrpc client's. */
-function emitter() {
-  const handlers = new Map()
-  return {
-    on(name, handler) {
-      handlers.set(name, [...(handlers.get(name) ?? []), handler])
-    },
-    off(name, handler) {
-      handlers.set(name, (handlers.get(name) ?? []).filter((item) => item !== handler))
-    },
-    emit(name, ...args) {
-      for (const handler of handlers.get(name) ?? []) handler(...args)
-    },
-  }
-}
+/** The bot's and the tester's made-up Matrix ids. */
+export const BOT = '@bot:hs.example'
+export const TESTER = '@tester:hs.example'
+export const OTHER = '@other:hs.example'
+export const STRANGER = '@stranger:elsewhere.example'
 
 /**
- * Fake Delta Chat profile: chats, contacts and messages in memory; every RPC
- * call is recorded in `calls`.
- * @returns `{ dc, core, calls, sent, addIncoming }`.
+ * Fake Matrix connection: rooms, state and events in memory; what the bot
+ * sends is recorded.
+ * @returns `{ matrix, connect, sent, state, created, joined, left, receipts, typing, redactions, deliver, message, invite }`.
  */
-export function makeDeltaChat() {
-  const calls = []
+export function makeMatrix() {
   const sent = []
-  const messages = new Map()
-  const chats = new Map([[10, { id: 10, name: 'Test Person', chatType: 'Single', isContactRequest: false, isDeviceChat: false, contacts: [11] }]])
-  const vcards = new Map([[11, TESTER_VCARD], [12, 'BEGIN:VCARD\nEND:VCARD\n']])
-  let nextId = 100
-  const events = emitter()
-  const handlers = {
-    startIo: async () => null,
-    stopIo: async () => null,
-    getMessage: async (_account, id) => {
-      const msg = messages.get(id)
-      if (msg === undefined) throw new Error(`no message ${id}`)
-      return msg
-    },
-    getBasicChatInfo: async (_account, id) => {
-      const chat = chats.get(id)
-      if (chat === undefined) throw new Error(`no chat ${id}`)
-      return chat
-    },
-    makeVcard: async (_account, [contactId]) => vcards.get(contactId) ?? '',
-    sendMsg: async (_account, chatId, data) => {
-      const id = nextId++
-      sent.push({ id, chatId, ...data })
-      messages.set(id, { id, chatId, fromId: 1, text: data.text ?? '', viewType: 'Text', isInfo: false, downloadState: 'Done' })
-      return id
-    },
-    sendReaction: async () => 1,
-    getFreshMsgs: async () => [],
-    getConfig: async () => 'bot@relay.example',
-    getChatSecurejoinQrCode: async () => 'https://i.delta.chat/#INVITE',
-    createQrSvg: async () => '<svg/>',
-    listTransports: async () => [{ addr: 'bot@relay.example' }, { addr: 'bot@other.example' }],
-    getConnectivity: async () => 4000,
-    createGroupChat: async (_account, name) => {
-      const id = nextId++
-      chats.set(id, { id, name, chatType: 'Group', isContactRequest: false, isDeviceChat: false, contacts: [] })
-      return id
-    },
-    getChatContacts: async (_account, chatId) => [1, ...(chats.get(chatId)?.contacts ?? [])],
-    addContactToChat: async (_account, chatId, contactId) => {
-      chats.get(chatId).contacts.push(contactId)
-      return null
-    },
-    getContact: async (_account, id) => ({ id, displayName: 'Test Person', address: 'tester@example.org' }),
+  const state = new Map()
+  const events = new Map()
+  const created = []
+  const joined = new Set()
+  const left = []
+  const invited = []
+  const receipts = []
+  const typing = []
+  const redactions = []
+  const failJoin = new Set()
+  let handlers
+  let next = 1
+  const key = (roomId, type, stateKey) => `${roomId}\u0000${type}\u0000${stateKey}`
+  function setState(roomId, type, stateKey, content) {
+    state.set(key(roomId, type, stateKey), { roomId, type, stateKey, content })
   }
-  const rpc = new Proxy({}, {
-    get(_target, name) {
-      return async (...args) => {
-        calls.push({ name, args })
-        const handler = handlers[name]
-        return handler === undefined ? null : handler(...args)
-      }
+  const matrix = {
+    userId: BOT,
+    deviceId: 'BOTDEVICE',
+    encryption: () => ({ verified: true, backup: true }),
+    async start(given) {
+      handlers = given
     },
-  })
-  const dc = { rpc, ...events }
-  const core = {
-    startServer: async () => ({ dc, close: () => calls.push({ name: 'close', args: [] }), exited: new Promise(() => {}) }),
-    ensureAccount: async () => 1,
-    createFingerprints,
-    startWatchdog: () => () => {},
-    writeInvite: async () => ({ link: 'https://i.delta.chat/#INVITE', svgPath: '/tmp/invite.svg' }),
+    stop() {},
+    async sendEvent(roomId, type, content) {
+      const eventId = `$bot${next++}`
+      const event = { event_id: eventId, room_id: roomId, sender: BOT, type, content, origin_server_ts: Date.now() }
+      events.set(eventId, event)
+      sent.push(event)
+      return eventId
+    },
+    async sendState(roomId, type, stateKey, content) {
+      setState(roomId, type, stateKey, content)
+      sent.push({ room_id: roomId, type, state_key: stateKey, content })
+      return `$state${next++}`
+    },
+    async getState(roomId, type, stateKey = '') {
+      return state.get(key(roomId, type, stateKey))?.content
+    },
+    async roomState(roomId) {
+      return [...state.values()].filter((entry) => entry.roomId === roomId).map((entry) => ({ type: entry.type, state_key: entry.stateKey, content: entry.content }))
+    },
+    async getEvent(_roomId, eventId) {
+      const event = events.get(eventId)
+      if (event === undefined) throw new Error(`no event ${eventId}`)
+      return event
+    },
+    async redact(roomId, eventId) {
+      redactions.push({ roomId, eventId })
+      return `$redaction${next++}`
+    },
+    async setTyping(roomId, on) {
+      typing.push({ roomId, on })
+    },
+    async readReceipt(roomId, eventId) {
+      receipts.push({ roomId, eventId })
+    },
+    async createRoom(options) {
+      const roomId = `!room${next++}:hs.example`
+      created.push({ roomId, options })
+      setState(roomId, 'm.room.create', '', options.creation_content ?? {})
+      setState(roomId, 'm.room.power_levels', '', options.power_level_content_override ?? {})
+      if (options.name) setState(roomId, 'm.room.name', '', { name: options.name })
+      for (const entry of options.initial_state ?? []) setState(roomId, entry.type, entry.state_key ?? '', entry.content)
+      joined.add(roomId)
+      return roomId
+    },
+    async join(roomId) {
+      if (failJoin.has(roomId)) throw new Error('M_FORBIDDEN')
+      joined.add(roomId)
+      return roomId
+    },
+    async leave(roomId) {
+      left.push(roomId)
+      joined.delete(roomId)
+    },
+    async invite(roomId, userId) {
+      invited.push({ roomId, userId })
+    },
+    async members() {
+      return []
+    },
+    async joinedRooms() {
+      return [...joined]
+    },
+    async upload(_roomId, _buffer, { name }) {
+      return { file: { url: `mxc://hs.example/${name}`, key: {}, iv: '', hashes: {}, v: 'v2' } }
+    },
+    async download() {
+      return Buffer.from('media bytes')
+    },
+    async setProfile() {},
+    async displayName() {
+      return 'Bot'
+    },
   }
-  /** Put an incoming message in the profile and announce it. */
-  function addIncoming(message) {
-    const id = message.id ?? nextId++
-    const msg = { id, chatId: 10, fromId: 11, text: '', viewType: 'Text', isInfo: false, isForwarded: false, downloadState: 'Done', quote: null, file: null, sender: { displayName: 'Test Person', address: 'tester@example.org' }, ...message }
-    messages.set(id, msg)
-    events.emit('IncomingMsg', 1, { kind: 'IncomingMsg', chatId: msg.chatId, msgId: id })
-    return id
+
+  /** Hand an event to the bot as if it came in a sync. @returns the event id. */
+  async function deliver(roomId, event) {
+    const full = { event_id: `$in${next++}`, room_id: roomId, sender: TESTER, origin_server_ts: Date.now(), ...event }
+    events.set(full.event_id, full)
+    await handlers.onEvent(roomId, full)
+    return full.event_id
   }
-  /** Wait until the bridge marked a message seen (or, for a stranger, its chat noticed). */
-  async function handled(id) {
-    await until(() => calls.some((call) => (call.name === 'markseenMsgs' && call.args[1].includes(id)) || (call.name === 'marknoticedChat' && call.args[1] === messages.get(id)?.chatId)), `message ${id}`)
-    await settle(5)
-    return id
+
+  /** A text message from someone (the tester by default). */
+  function message(roomId, body, { sender = TESTER, extra = {} } = {}) {
+    return deliver(roomId, { type: 'm.room.message', sender, content: { msgtype: 'm.text', body, ...extra } })
   }
-  return { dc, core, calls, sent, chats, messages, handlers, addIncoming, handled, emit: events.emit }
+
+  /** An invite to a room (a Space when `space`), as the bot sees it. */
+  async function invite(roomId, sender = TESTER, { space = false, direct = false, powerLevels } = {}) {
+    setState(roomId, 'm.room.create', '', space ? { type: 'm.space' } : {})
+    if (powerLevels !== undefined) setState(roomId, 'm.room.power_levels', '', powerLevels)
+    handlers.onInvite(roomId, { type: 'm.room.member', sender, state_key: BOT, content: { membership: 'invite', ...(direct ? { is_direct: true } : {}) } })
+  }
+
+  return {
+    matrix,
+    connect: async () => matrix,
+    sent,
+    state,
+    events,
+    created,
+    joined,
+    left,
+    invited,
+    receipts,
+    typing,
+    redactions,
+    failJoin,
+    setState,
+    deliver,
+    message,
+    invite,
+    handlers: () => handlers,
+  }
 }
 
 /**
@@ -253,7 +297,7 @@ export function makeHost({ config = {} } = {}) {
     sessionTitle: {
       get: titleOf,
       rename: (session, title) => session.append('session/title', { title, source: { kind: 'user' }, messageSeqs: [] }),
-      refresh: async (session) => session.append('session/title', { title: '[Delta Chat message from Tester', source: { kind: 'fallback' }, messageSeqs: [1] }),
+      refresh: async (session) => session.append('session/title', { title: 'Weekend plans', source: { kind: 'generated' }, messageSeqs: [1] }),
     },
     sessionController: controller,
     subagents: { listChildren: async (parentId) => children.get(parentId) ?? [] },
@@ -282,15 +326,18 @@ export function makeHost({ config = {} } = {}) {
   }
   const liveConfig = Object.fromEntries(Object.entries({
     enabled: true,
+    homeserver: 'https://hs.example',
+    userId: '@bot:hs.example',
+    passwordFile: '/nonexistent/password',
     displayName: 'Bot',
     avatar: '',
-    relays: ['relay.example'],
-    allowedUsers: [{ fingerprint: TESTER_FINGERPRINT, name: 'Tester' }],
+    allowedUsers: [{ userId: '@tester:hs.example', name: 'Tester' }, { userId: '@other:hs.example', name: 'Other' }],
     cwd: '/work/one',
     agentPreset: '',
     mirrorTurns: true,
     busyMessages: 'steer',
     transcriber: 'off',
+    streaming: true,
     ...config,
   }).map(([key, value]) => [key, { value, get() { return this.value } }]))
   return {
@@ -301,10 +348,14 @@ export function makeHost({ config = {} } = {}) {
     selected,
     logs,
     services,
-    service: () => provided.get('deltachatChats'),
+    service: () => provided.get('matrixRooms'),
     /** Deliver a Host event, such as `subagent/start`, to the bridge's listeners. */
     emit(name, data) {
-      for (const handler of listeners.get(name) ?? []) handler(data)
+      return (listeners.get(name) ?? []).map((handler) => handler(data))
+    },
+    /** Call the bridge's listeners of a Host event with several arguments, such as `agent/pre-step`. */
+    call(name, ...args) {
+      return (listeners.get(name) ?? []).map((handler) => handler(...args))
     },
     /** Make a helper session under a parent, listed in the parent's catalog. */
     addChild(parentId, childId, label) {

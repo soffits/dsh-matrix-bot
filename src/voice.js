@@ -117,10 +117,10 @@ export function transcriptNote(media, outcome) {
   const length = media.seconds === undefined ? '' : `, ${Math.floor(media.seconds / 60)}:${String(media.seconds % 60).padStart(2, '0')}`
   const where = typeof outcome.path === 'string' ? `the file is attached and saved at ${outcome.path}` : 'the file is attached'
   if (outcome.error !== undefined) {
-    return `[Delta Chat ${media.kind} "${media.name}"${length}: not transcribed (${outcome.error}); ${where}]`
+    return `[Matrix ${media.kind} "${media.name}"${length}: not transcribed (${outcome.error}); ${where}]`
   }
   if (outcome.text.length === 0) {
-    return `[Delta Chat ${media.kind} "${media.name}"${length}: ${outcome.by} heard no speech; ${where}]`
+    return `[Matrix ${media.kind} "${media.name}"${length}: ${outcome.by} heard no speech; ${where}]`
   }
-  return `[Delta Chat ${media.kind} "${media.name}"${length}, transcribed by ${outcome.by}; the transcript may contain mistakes, and ${where} to check it]\n${outcome.text}`
+  return `[Matrix ${media.kind} "${media.name}"${length}, transcribed by ${outcome.by}; the transcript may contain mistakes, and ${where} to check it]\n${outcome.text}`
 }
