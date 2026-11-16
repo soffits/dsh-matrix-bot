@@ -12,11 +12,10 @@ Use the DSH Plugins page, or install from a shell:
 dsh plugin --profile web add @soffits/dsh-matrix-bot
 ```
 
-You need Node.js 24 or newer. Encryption uses `@matrix-org/matrix-sdk-crypto-nodejs`, which downloads its prebuilt native library in an install script. If your profile installs with pnpm 10 or newer, allow that script in the profile's `pnpm-workspace.yaml` before installing:
+You need Node.js 24 or newer. Encryption uses `@matrix-org/matrix-sdk-crypto-nodejs`, which downloads its prebuilt native library in an install script. pnpm 10 and newer skip such scripts until you approve them, so in the profile directory run:
 
-```yaml
-onlyBuiltDependencies:
-  - '@matrix-org/matrix-sdk-crypto-nodejs'
+```sh
+pnpm approve-builds @matrix-org/matrix-sdk-crypto-nodejs
 ```
 
 The bundle adds two plugin rows: `matrix-bot` (the bot) and `matrix-bot-tools` (which gives agents the `matrix_send` tool).
