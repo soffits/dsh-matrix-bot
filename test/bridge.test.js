@@ -81,13 +81,15 @@ test('a message becomes a prompt with its sender recorded, and the answer comes 
   assert.equal(prompt.content[0].text, 'hello')
   assert.deepEqual(reactionsOn(m, eventId), ['⏳'])
   assert.ok(m.receipts.some((receipt) => receipt.eventId === eventId))
-  // The sender reaches the session at the prompt's step, as a principal and a notice before it.
+  // The sender and send time reach the session at the prompt's step, as metadata on its source.
   const message = { id: 'p1', role: 'user', content: prompt.content, source: { kind: 'user', rpcId: prompt.requestId } }
   const [decision] = await Promise.all(host.call('agent/pre-step', {}, async () => ({ kind: 'enter', messages: [message] })))
-  assert.equal(decision.messages.length, 2)
-  assert.match(decision.messages[0].content[0].text, /^\[Matrix message from Tester \(@tester:hs\.example\), sent /u)
-  assert.equal(decision.messages[1].source.principal.id, TESTER)
-  assert.equal(decision.messages[1].source.principal.kind, 'matrix-user')
+  assert.equal(decision.messages.length, 1, 'no message of its own: rendering is the renderer\'s job')
+  assert.equal(decision.messages[0].source.principal.id, TESTER)
+  assert.equal(decision.messages[0].source.principal.kind, 'matrix-user')
+  assert.equal(decision.messages[0].source.principal.chat.id, roomId)
+  assert.equal(typeof decision.messages[0].source.envelope.sentAt, 'number')
+  assert.deepEqual(decision.messages[0].content, prompt.content)
   runTurn(host, prompt.sessionId, 1, { requestId: prompt.requestId, answer: 'Hi **there**.' })
   await until(() => bodies(m, roomId).includes('Hi **there**.'), 'the answer')
   const answer = messages(m, roomId).at(-1)

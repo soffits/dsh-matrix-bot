@@ -6,11 +6,11 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { parseCommand, runCommand } from './commands.js'
 import { dataDir, POST_SOURCE_KIND, REQUEST_PREFIX } from './constants.js'
-import { composePrompt, describeReply, hasMedia, ownText, replyTargetOf } from './inbound.js'
+import { composePrompt, hasMedia, ownText, replyInfo, replyTargetOf } from './inbound.js'
 import { allowedEntry } from './operations.js'
 import { matrixUserPrincipal, withPrincipal } from './sender.js'
 import { admitPrompt, hasRequest, recordMessage, unarchive } from './sessions.js'
-import { clip, formatMoment } from './text.js'
+import { clip } from './text.js'
 
 /** @returns a short message for any thrown value. */
 function messageOf(error) {
@@ -185,7 +185,7 @@ export function createEvents({ ctx, getStore, storeReady, getMatrix, setting, sp
       if (react) await reactions.mark(roomId, event.event_id, reactions.emojiFor(live?.status !== undefined && live.status !== 'idle', steer))
       const replyTo = replyTargetOf(event.content)
       const target = replyTo === undefined ? undefined : await getMatrix().getEvent(roomId, replyTo).catch(() => undefined)
-      const context = describeReply(target, { botId: getMatrix().userId, sentRecord: replyTo === undefined ? undefined : getStore().sentRecord(replyTo), names: { [sender.userId]: sender.name } })
+      const reply = replyInfo(target, { botId: getMatrix().userId, senderId: sender.userId, sentRecord: replyTo === undefined ? undefined : getStore().sentRecord(replyTo), names: { [sender.userId]: sender.name } })
       const prompt = await composePrompt(event, {
         download: (content) => getMatrix().download(content),
         mediaDir: join(dataDir(), 'media'),
@@ -206,8 +206,13 @@ export function createEvents({ ctx, getStore, storeReady, getMatrix, setting, sp
       const running = agent.status !== undefined && agent.status !== 'idle'
       const mode = running && steer ? 'steer' : 'queue'
       const principal = matrixUserPrincipal(sender.userId, { name: sender.name, roomId, room: getStore().room(roomId)?.roomName })
-      principals.remember(requestId, { principal, context, sentAt: formatMoment(event.origin_server_ts) })
-      const admitted = await admitPrompt(ctx, agent, { requestId, text: prompt.text, attachments: prompt.attachments, mode, principal }, signal)
+      const envelope = {
+        ...(typeof event.origin_server_ts === 'number' ? { sentAt: event.origin_server_ts } : {}),
+        ...(reply === undefined ? {} : { replyTo: reply }),
+      }
+      const metadata = { principal, ...(Object.keys(envelope).length === 0 ? {} : { envelope }) }
+      principals.remember(requestId, metadata)
+      const admitted = await admitPrompt(ctx, agent, { requestId, text: prompt.text, attachments: prompt.attachments, mode, ...metadata }, signal)
       if (!react) return
       if (admitted) reactions.admitted(event.event_id)
       else await reactions.release([event.event_id])

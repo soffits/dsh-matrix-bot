@@ -1,7 +1,7 @@
 /**
  * Turn one incoming Matrix message into a DSH prompt: its text, its media as
- * an attachment (pictures as images, voice messages transcribed), and the
- * context the sender notice carries (what it replies to).
+ * an attachment (pictures as images, voice messages transcribed), and what it
+ * replies to as metadata for the message's `source.envelope`.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
@@ -9,10 +9,6 @@ import { MAX_FILE_BYTES } from './constants.js'
 import { clip } from './text.js'
 import { transcribe, transcriptNote } from './voice.js'
 
-/** Longest replied-to text passed to the agent. */
-const QUOTE_LIMIT = 2000
-/** Longest text of a message sent on someone's behalf passed to the agent. */
-const SENT_TEXT_LIMIT = 8000
 /** Image types the DSH attachment store takes as pictures. */
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 /** Message types that carry media. */
@@ -46,25 +42,39 @@ export function hasMedia(content) {
 }
 
 /**
- * Describe what a message replies to.
+ * What a message replies to, as `envelope.replyTo` (the shape dsh-message-context reads).
  * @param target - the replied-to event, or undefined when it could not be read.
- * @param options - `{ botId, sentRecord, names }`: the bot's user id, the send
- *   record the target belongs to, and names by user id.
- * @returns a context block, or undefined.
+ * @param options - `{ botId, senderId, sentRecord, names }`: the bot's user id,
+ *   the replying user's id, the send record the target belongs to, and names by user id.
+ * @returns `{ from, sentAt, text, details }` (fields only when known), or undefined.
  */
-export function describeReply(target, { botId, sentRecord, names = {} } = {}) {
+export function replyInfo(target, { botId, senderId, sentRecord, names = {} } = {}) {
   if (target === undefined) return undefined
   const content = target.content ?? {}
-  const text = clip(hasMedia(content) ? `[${content.msgtype.slice(2)} "${content.body ?? ''}"]` : ownText(content), QUOTE_LIMIT)
+  const details = []
+  let text = hasMedia(content) ? undefined : ownText(content)
+  if (hasMedia(content)) details.push(`contains ${content.msgtype.slice(2)} "${content.body ?? ''}"`)
+  let from
   if (target.sender === botId) {
+    from = { role: 'assistant' }
     if (sentRecord !== undefined) {
-      const by = sentRecord.job ? `job "${sentRecord.job}"` : sentRecord.fromSession ? `session ${sentRecord.fromSession}` : sentRecord.label || 'another sender'
-      const full = typeof sentRecord.text === 'string' && sentRecord.text.length > 0 ? clip(sentRecord.text, SENT_TEXT_LIMIT) : text
-      return `[Replying to a message ${by} sent here:]\n${full}`
+      details.unshift('posted by the bot on behalf of another sender')
+      if (sentRecord.job) from = { kind: 'cron-job', channel: 'cron', id: sentRecord.job, name: sentRecord.job }
+      else if (sentRecord.fromSession) from = { kind: 'dsh-session', channel: 'dsh', id: sentRecord.fromSession }
+      else if (sentRecord.label) from = { kind: 'external', channel: 'external', id: sentRecord.label, name: sentRecord.label }
+      if (typeof sentRecord.text === 'string' && sentRecord.text.length > 0) text = sentRecord.text
     }
-    return `[Replying to your earlier message:]\n${text}`
+  } else if (target.sender === senderId) {
+    from = { role: 'sender' }
+  } else {
+    from = { kind: 'matrix-user', channel: 'matrix', id: target.sender, ...(names[target.sender] ? { name: names[target.sender] } : {}) }
   }
-  return `[Replying to ${names[target.sender] || target.sender}:]\n${text}`
+  return {
+    from,
+    ...(typeof target.origin_server_ts === 'number' ? { sentAt: target.origin_server_ts } : {}),
+    ...(text ? { text } : {}),
+    ...(details.length > 0 ? { details } : {}),
+  }
 }
 
 /** @returns a safe file name for a download. */

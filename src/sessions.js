@@ -182,7 +182,7 @@ export function hasRequest(agent, requestId) {
  * @param signal - request lifetime.
  * @returns whether the prompt was handed over (false for a duplicate or an empty one).
  */
-export async function admitPrompt(ctx, agent, { requestId, text, attachments = [], mode, principal }, signal) {
+export async function admitPrompt(ctx, agent, { requestId, text, attachments = [], mode, principal, envelope }, signal) {
   if (hasRequest(agent, requestId)) return false
   const content = [...(text.trim().length === 0 ? [] : [{ type: 'text', text }]), ...attachments]
   if (content.length === 0) return false
@@ -192,7 +192,7 @@ export async function admitPrompt(ctx, agent, { requestId, text, attachments = [
     await controller.prompt({ sessionId, requestId, mode, content }, signal)
     return true
   }
-  const message = { id: randomUUID(), role: 'user', content, source: { kind: 'user', rpcId: requestId, ...(principal === undefined ? {} : { principal }) } }
+  const message = { id: randomUUID(), role: 'user', content, source: { kind: 'user', rpcId: requestId, ...(principal === undefined ? {} : { principal }), ...(envelope === undefined ? {} : { envelope }) } }
   if (mode === 'steer' && typeof agent.steer === 'function') agent.steer(message)
   else if (typeof agent.followup === 'function') agent.followup(message)
   else agent.send(message, mode === 'steer' ? 'next-step' : 'next-turn', true)
