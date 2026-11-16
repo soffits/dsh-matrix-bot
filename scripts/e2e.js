@@ -248,6 +248,20 @@ try {
   await person.client.sendMessage(dm, { msgtype: 'm.text', body: 'after the restart' })
   await until(() => host.prompts.some((prompt) => prompt.content[0].text === 'after the restart'), 'the prompt after the restart', 3000)
   log('restart kept the device and decryption')
+
+  // With its data lost, the bot logs in on a new device and verifies it with the recovery key.
+  host.dispose()
+  await settle(500)
+  await rm(join(process.env.DSH_HOME, 'matrix', 'account'), { recursive: true })
+  host = startBot(base, botId, passwordFile, person.userId)
+  await until(() => host.logs.some(([, line]) => /^running as/u.test(line)), 'the bot on a new device', 3000)
+  const running = host.logs.find(([, line]) => /^running as/u.test(line))[1]
+  assert.doesNotMatch(running, new RegExp(`device ${deviceId};`, 'u'))
+  assert.match(running, /; verified, key backup on\)$/u)
+  assert.ok(host.logs.some(([, line]) => line === 'verified this device with the recovery key'))
+  await person.client.sendMessage(dm, { msgtype: 'm.text', body: 'to the new device' })
+  await until(() => host.prompts.some((prompt) => prompt.content[0].text === 'to the new device'), 'the prompt on the new device', 3000)
+  log('a new device verified itself with the recovery key and reads the room')
   person.client.stop()
   await settle(2500)
   person.client.crypto.engine.machine.close()

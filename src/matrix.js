@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path'
 import { LogLevel, LogService, MatrixClient, RustSdkCryptoStorageProvider, SimpleFsStorageProvider } from '@vector-im/matrix-bot-sdk'
 
 const require = createRequire(import.meta.url)
-const { BackupDecryptionKey, SecretStorageKey, StoreType } = require('@matrix-org/matrix-sdk-crypto-nodejs')
+const { BackupDecryptionKey, SecretStorageItems, SecretStorageKey, StoreType } = require('@matrix-org/matrix-sdk-crypto-nodejs')
 
 /** Account data name of the key backup's secret. */
 const BACKUP_SECRET = 'm.megolm_backup.v1'
@@ -162,11 +162,31 @@ async function bootstrapEncryption(client, { recoveryKeyFile, info, warn }) {
       warn(`this device is not verified: the account has cross-signing keys and ${recoveryKeyFile} holds no recovery key`)
       return { verified: false, backup: false }
     } else {
-      await crypto.confirmIdentityWithRecoveryKey(recoveryKey)
+      await importIdentity(client, recoveryKey)
       info('verified this device with the recovery key')
     }
   }
   return { verified: true, backup: await ensureBackup(client, recoveryKey, warn) }
+}
+
+/**
+ * Take the account's cross-signing keys from secret storage and sign this
+ * device with them. The SDK's own version holds a native device object that,
+ * still alive at exit, makes the crypto library abort the process.
+ */
+async function importIdentity(client, recoveryKey) {
+  const engine = client.crypto.engine
+  const machine = engine.machine
+  await engine.processOutgoingRequests([machine.queryKeysForUsers([machine.userId])])
+  const storage = await openSecretStorage(client, recoveryKey)
+  if (storage === undefined) throw new Error('the account has no default secret storage key')
+  const secret = async (name) => JSON.stringify(await client.getAccountData(name))
+  const items = new SecretStorageItems({
+    masterKey: await secret('m.cross_signing.master'),
+    userSigningKey: await secret('m.cross_signing.user_signing'),
+    selfSigningKey: await secret('m.cross_signing.self_signing'),
+  })
+  await engine.processOutgoingRequests([await machine.importSecretsFromSecretStorage(storage, items)])
 }
 
 /** @returns the default secret storage key opened with the recovery key, or undefined. */
@@ -256,6 +276,16 @@ function wrapClient(client, login, { recoveryKeyFile, info, warn }) {
   let syncing = Promise.resolve()
   let processing = Promise.resolve()
   client.persistTokenAfterSync = true
+  // The native crypto library aborts the whole process when its store is
+  // dropped at exit outside its runtime, so an open store is closed first.
+  let closed = false
+  const close = () => {
+    if (closed) return
+    closed = true
+    process.off('exit', close)
+    client.crypto?.engine?.machine?.close?.()
+  }
+  process.on('exit', close)
   const doSync = client.doSync.bind(client)
   const processSync = client.processSync.bind(client)
   client.doSync = (token) => (syncing = doSync(token))
@@ -299,9 +329,8 @@ function wrapClient(client, login, { recoveryKeyFile, info, warn }) {
         client.stop()
         await Promise.allSettled([syncing, processing])
         const engine = client.crypto?.engine
-        if (engine === undefined) return
-        await Promise.allSettled([engine.keyBackupWaiter, engine.lock.acquire('sync', () => {})])
-        engine.machine.close()
+        if (engine !== undefined) await Promise.allSettled([engine.keyBackupWaiter, engine.lock.acquire('sync', () => {})])
+        close()
       })()
       return stopping
     },

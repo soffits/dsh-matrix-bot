@@ -16,6 +16,12 @@
 - On the first start the bot creates its cross-signing keys (MSC3967 lets the first upload go without interactive auth, which MAS servers can't do for bots), secret storage with a new recovery key, and a server-side key backup whose key is kept in secret storage. The recovery key is written once to `recoveryKeyFile` (0600) and never logged or sent.
 - On a new device of an account that already has cross-signing, the bot reads the recovery key from `recoveryKeyFile`, imports the cross-signing keys from secret storage, signs its device and turns on the backup. Without the key it runs unverified and says so in its status; it never resets the account's cross-signing by itself.
 - Rooms the bot creates are encrypted from their first event.
+- A device that verifies itself with the recovery key imports the cross-signing keys through the crypto machine directly, not the SDK's helper: that helper keeps a native device object alive, and one alive at exit makes the crypto library abort the process.
+- Stopping waits until the sync loop is idle (the SDK's own stop still processes the request in flight), saves no sync token for an unprocessed batch, then closes the crypto store; a new connection waits for the old one's stop, as both would use one store. An open store is also closed on process exit, since the native library aborts when it is dropped outside its runtime.
+
+## Spaces and rooms (power levels)
+
+- The person is made admin with a power levels update right after the bot creates a room, not in `power_level_content_override`: room version 12 refuses creators in the power levels, and in older versions overriding `users` would drop the bot's own level.
 
 ## Spaces and rooms
 
