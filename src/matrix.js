@@ -108,15 +108,23 @@ async function loadLogin({ dir, homeserver, userId, passwordFile, deviceName, re
   return record
 }
 
-/** Route the SDK's log through ours, warnings and errors only. */
+/**
+ * Route the SDK's log through ours, warnings and errors only. The SDK logs
+ * every failed request; a missing state event or account data entry is an
+ * answer the caller expects (it reads them to find out), so those stay out.
+ */
 function quietSdk(warn) {
+  const line = (module, parts) => {
+    if (parts.some((part) => errcodeOf(part) === 'M_NOT_FOUND')) return
+    warn(`sdk ${module}: ${parts.map(describe).join(' ')}`)
+  }
   LogService.setLevel(LogLevel.WARN)
   LogService.setLogger({
     trace() {},
     debug() {},
     info() {},
-    warn: (module, ...parts) => warn(`sdk ${module}: ${parts.map(describe).join(' ')}`),
-    error: (module, ...parts) => warn(`sdk ${module}: ${parts.map(describe).join(' ')}`),
+    warn: (module, ...parts) => line(module, parts),
+    error: (module, ...parts) => line(module, parts),
   })
 }
 
@@ -239,6 +247,23 @@ export async function connect(options) {
 function wrapClient(client, login, { recoveryKeyFile, info, warn }) {
   let encryption = { verified: false, backup: false }
   const encrypted = new Map()
+  // The SDK's stop only ends the sync loop after the request in flight, and
+  // would still process its answer. A stopping client processes nothing and
+  // saves no sync token, so the next run gets those events again, and the
+  // crypto store is closed only once the loop is idle: two machines on one
+  // store, or one closed under a running task, break it.
+  let stopping
+  let syncing = Promise.resolve()
+  let processing = Promise.resolve()
+  client.persistTokenAfterSync = true
+  const doSync = client.doSync.bind(client)
+  const processSync = client.processSync.bind(client)
+  client.doSync = (token) => (syncing = doSync(token))
+  client.processSync = (raw, emitFn) => {
+    if (stopping !== undefined) return Promise.reject(new Error('stopping'))
+    processing = processSync(raw, emitFn)
+    return processing
+  }
 
   async function isEncrypted(roomId) {
     if (!encrypted.has(roomId)) encrypted.set(roomId, await client.crypto.isRoomEncrypted(roomId))
@@ -268,8 +293,17 @@ function wrapClient(client, login, { recoveryKeyFile, info, warn }) {
         warn(`encryption setup failed: ${describe(error)}`)
       }
     },
+    /** Stop syncing; resolves once the client is idle and its crypto store closed. */
     stop() {
-      client.stop()
+      stopping ??= (async () => {
+        client.stop()
+        await Promise.allSettled([syncing, processing])
+        const engine = client.crypto?.engine
+        if (engine === undefined) return
+        await Promise.allSettled([engine.keyBackupWaiter, engine.lock.acquire('sync', () => {})])
+        engine.machine.close()
+      })()
+      return stopping
     },
 
     async sendEvent(roomId, type, content) {

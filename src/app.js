@@ -82,6 +82,8 @@ export function createBridge(ctx, config, connect) {
   let starting
   let retryTimer
   let retryDelay = RETRY_MIN_MS
+  /** The previous connection's stop; a new one waits for it, as both would use one crypto store. */
+  let stopped = Promise.resolve()
   let disposed = false
   let store
   const storeReady = openState().then((opened) => { store = opened })
@@ -454,12 +456,16 @@ export function createBridge(ctx, config, connect) {
     await publishStatus({ state: 'starting', detail: '' })
     let connection
     try {
+      await stopped
       if (store.data.since === undefined) {
         store.data.since = Date.now()
         await store.save()
       }
       connection = await connect({ dir: join(dataDir(), 'account'), ...loginSettings(), info, warn })
-      if (disposed) return
+      if (disposed) {
+        stopped = Promise.resolve(connection.stop()).catch(() => {})
+        return
+      }
       matrix = connection
       await connection.start({
         onEvent: (roomId, event) => onEvent(roomId, event),
@@ -477,7 +483,7 @@ export function createBridge(ctx, config, connect) {
     } catch (error) {
       reportError('start', error)
       await publishStatus({ state: 'error', detail: messageOf(error) })
-      if (matrix === undefined) connection?.stop()
+      if (matrix === undefined && connection !== undefined) stopped = Promise.resolve(connection.stop()).catch(() => {})
       stopRuntime()
       scheduleRetry()
     }
@@ -504,7 +510,7 @@ export function createBridge(ctx, config, connect) {
     matrix = undefined
     spool.stop()
     if (current === undefined) return
-    current.stop()
+    stopped = Promise.resolve(current.stop()).catch((error) => reportError('stop', error))
     void publishStatus({ state: disposed ? 'stopped' : 'restarting' })
   }
 

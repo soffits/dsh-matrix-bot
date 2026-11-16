@@ -65,9 +65,16 @@ export function createSpaces({ requireMatrix, getStore, setting, notice, command
     return { space: String(setting('spaceName', '')).trim() || display, lobby: display }
   }
 
-  /** @returns power levels where the bot and the person are both admins. */
-  function sharedPower(userId) {
-    return { users: { [requireMatrix().userId]: 100, [userId]: 100 } }
+  /**
+   * Make the person an admin of a room the bot made. Done after creation:
+   * room version 12 refuses creators in the power levels, older versions
+   * would lose the bot's own level if `users` were overridden at creation.
+   */
+  async function sharePower(roomId, userId) {
+    const matrix = requireMatrix()
+    const current = await matrix.getState(roomId, 'm.room.power_levels') ?? {}
+    if (current.users?.[userId] === 100) return
+    await matrix.sendState(roomId, 'm.room.power_levels', '', { ...current, users: { ...(current.users ?? {}), [userId]: 100 } })
   }
 
   /**
@@ -108,8 +115,8 @@ export function createSpaces({ requireMatrix, getStore, setting, notice, command
       visibility: 'private',
       invite: [userId],
       initial_state: [ENCRYPTION, { type: 'm.space.parent', state_key: spaceId, content: { via: [serverOf(matrix.userId)], canonical: true } }],
-      power_level_content_override: sharedPower(userId),
     })
+    await sharePower(roomId, userId)
     await matrix.sendState(spaceId, 'm.space.child', roomId, { via: [serverOf(matrix.userId)], suggested: true })
     await getStore().describeRoom(roomId, { owner: userId, spaceId })
     await publishCommands(roomId)
@@ -135,8 +142,9 @@ export function createSpaces({ requireMatrix, getStore, setting, notice, command
       visibility: 'private',
       invite: [userId],
       creation_content: { type: 'm.space' },
-      power_level_content_override: { ...sharedPower(userId), events_default: 100 },
+      power_level_content_override: { events_default: 100 },
     })
+    await sharePower(spaceId, userId)
     await store.addSpace(userId, spaceId)
     info(`made a Space for ${userId}`)
     if (lobbyId !== undefined) {

@@ -46,7 +46,7 @@ test('a first direct chat makes the person a private Space, links the chat as it
   const space = m.created.find((entry) => entry.options.creation_content?.type === 'm.space')
   assert.ok(space, 'a Space was made')
   assert.deepEqual(space.options.invite, [TESTER])
-  assert.equal(space.options.power_level_content_override.users[TESTER], 100)
+  assert.equal((await m.matrix.getState(space.roomId, 'm.room.power_levels')).users[TESTER], 100)
   assert.equal(space.options.name, 'Bot')
   assert.deepEqual(await m.matrix.getState(space.roomId, 'm.space.child', roomId), { via: ['hs.example'], suggested: true })
   const [help] = messages(m, roomId)
