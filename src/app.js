@@ -80,6 +80,8 @@ export function createBridge(ctx, config, connect) {
   let starting
   let retryTimer
   let retryDelay = RETRY_MIN_MS
+  /** The account as configured when the running connection logged in. */
+  let account
   /** The previous connection's stop; a new one waits for it, as both would use one crypto store. */
   let stopped = Promise.resolve()
   let disposed = false
@@ -266,7 +268,9 @@ export function createBridge(ctx, config, connect) {
         store.data.since = Date.now()
         await store.save()
       }
-      connection = await connect({ dir: join(dataDir(), 'account'), ...loginSettings(), info, warn })
+      const login = loginSettings()
+      connection = await connect({ dir: join(dataDir(), 'account'), ...login, info, warn })
+      account = login.userId
       if (disposed) {
         stopped = Promise.resolve(connection.stop()).catch(() => {})
         return
@@ -354,7 +358,7 @@ export function createBridge(ctx, config, connect) {
       await start()
       return
     }
-    if (matrix.userId !== String(setting('userId', '')).trim()) {
+    if (account !== String(setting('userId', '')).trim()) {
       await restart('the account changed')
       return
     }

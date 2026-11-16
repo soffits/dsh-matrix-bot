@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { COMMANDS, helpText, parseCommand } from '../src/commands.js'
 import { composePrompt, describeReply, ownText } from '../src/inbound.js'
-import { trackCalls } from '../src/matrix.js'
+import { bootstrapEncryption, loadLogin, trackCalls, whileRateLimited } from '../src/matrix.js'
 import { editContent, mediaKind, textContent } from '../src/outbound.js'
 import { parseAnswer, questionReactions, questionText } from '../src/prompts.js'
 import { childLevels, commandStates, serverOf } from '../src/spaces.js'
@@ -193,4 +193,104 @@ test('the crypto store closes only after the calls running in it end, and takes 
   assert.equal(await running, 'done')
   await drain
   assert.equal(drained, true)
+})
+
+test('a stored login is reused for the account as configured, so a restart makes no new device', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'login-'))
+  const passwordFile = join(dir, 'password')
+  await writeFile(passwordFile, 'made-up password\n', { mode: 0o600 })
+  const requests = []
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), init, body: JSON.parse(init.body) })
+    return new Response(JSON.stringify({ user_id: '@bot:hs.example', device_id: 'DEVICE1', access_token: 'made-up-token' }), { status: 200 })
+  }
+  try {
+    // A localpart is a valid login name; the server answers with the full user id.
+    const options = { dir, homeserver: 'https://hs.example', userId: 'bot', passwordFile, deviceName: 'DSH', renew: false, info: () => {} }
+    const first = await loadLogin(options)
+    const second = await loadLogin(options)
+    assert.equal(requests.length, 1)
+    assert.equal(second.deviceId, first.deviceId)
+    assert.equal(requests[0].init.redirect, 'error')
+    assert.equal((await stat(join(dir, 'session.json'))).mode & 0o777, 0o600)
+    // A renewed login asks for the same device.
+    await loadLogin({ ...options, renew: true })
+    assert.equal(requests[1].body.device_id, 'DEVICE1')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
+test('a state write that failed does not stop later ones', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'state-'))
+  const blocker = join(dir, 'blocked')
+  await writeFile(blocker, '')
+  const store = await openState(join(blocker, 'state.json'))
+  await assert.rejects(store.notePending({ userId: '@someone:hs.example', roomId: '!r:hs.example', kind: 'message' }))
+  await rm(blocker)
+  await store.notePending({ userId: '@someone:hs.example', roomId: '!r:hs.example', kind: 'message' })
+  assert.equal(JSON.parse(await readFile(join(blocker, 'state.json'), 'utf8')).pending['@someone:hs.example'].count, 2)
+})
+
+test('a send the server rate limits waits the time it asks and goes out; other errors fail at once', async () => {
+  const waits = []
+  const sleep = async (ms) => { waits.push(ms) }
+  const limited = Object.assign(new Error('Too Many Requests'), { statusCode: 429, errcode: 'M_LIMIT_EXCEEDED', retryAfterMs: 4000 })
+  let calls = 0
+  const result = await whileRateLimited(async () => {
+    calls += 1
+    if (calls < 3) throw limited
+    return '$sent'
+  }, { sleep })
+  assert.equal(result, '$sent')
+  assert.deepEqual(waits, [4000, 4000])
+  await assert.rejects(whileRateLimited(async () => { throw Object.assign(new Error('forbidden'), { statusCode: 403 }) }, { sleep }), /forbidden/u)
+  assert.equal(waits.length, 2)
+  // A stopping connection gives up instead of waiting.
+  await assert.rejects(whileRateLimited(async () => { throw limited }, { sleep, stopped: () => true }), /Too Many/u)
+  assert.equal(waits.length, 2)
+})
+
+test('a new identity never overwrites a recovery key file it cannot use, and reuses one that opens the account', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'identity-'))
+  const recoveryKeyFile = join(dir, 'recovery-key')
+  /** A bot account with no cross-signing keys, its account data in memory. */
+  const account = () => {
+    const data = new Map()
+    const identities = []
+    return {
+      data,
+      identities,
+      client: {
+        crypto: { engine: { machine: { crossSigningStatus: async () => ({ hasMaster: false, hasSelfSigning: false, hasUserSigning: false }) } }, createIdentity: async (key) => { identities.push(key) } },
+        getUserId: async () => '@bot:hs.example',
+        doRequest: async () => ({ master_keys: {} }),
+        setAccountData: async (type, content) => { data.set(type, content) },
+        getSafeAccountData: async (type, fallback) => data.get(type) ?? fallback,
+        getKeyBackupVersion: async () => ({ version: '1', algorithm: 'another.algorithm' }),
+      },
+    }
+  }
+  const warnings = []
+  const options = { recoveryKeyFile, info: () => {}, warn: (line) => warnings.push(line) }
+
+  const first = account()
+  assert.equal((await bootstrapEncryption(first.client, options)).verified, true)
+  const key = (await readFile(recoveryKeyFile, 'utf8')).trim()
+  assert.deepEqual(first.identities, [key])
+
+  // Setup that stopped before the identity was made: the key on disk opens the account and is used.
+  first.identities.length = 0
+  assert.equal((await bootstrapEncryption(first.client, options)).verified, true)
+  assert.deepEqual(first.identities, [key])
+
+  // Another account: the key on disk is not its own and stays as it is.
+  const second = account()
+  const result = await bootstrapEncryption(second.client, options)
+  assert.equal(result.verified, false)
+  assert.equal(second.data.size, 0)
+  assert.deepEqual(second.identities, [])
+  assert.equal((await readFile(recoveryKeyFile, 'utf8')).trim(), key)
+  assert.match(warnings.at(-1), /does not open this account/u)
 })

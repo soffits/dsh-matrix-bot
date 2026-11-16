@@ -29,6 +29,35 @@ export function errcodeOf(error) {
   return error?.errcode ?? error?.body?.errcode
 }
 
+/** Longest single wait for a rate limit, and the waits a send tries before it fails. */
+const RATE_LIMIT_MAX_WAIT_MS = 60_000
+const RATE_LIMIT_ATTEMPTS = 8
+/** Wait when a rate limit names no time. */
+const RATE_LIMIT_DEFAULT_MS = 2_000
+
+/**
+ * Run a request again while the server says it is rate limited (429). The
+ * server took nothing then, so the request is not sent twice. Synapse limits
+ * messages, edits, reactions and redactions alike, which a streamed answer
+ * reaches.
+ * @param call - the request.
+ * @param options - `{ stopped, sleep }`: `stopped()` ends the retries; `sleep(ms)` waits.
+ * @returns the request's result.
+ */
+export async function whileRateLimited(call, { stopped = () => false, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await call()
+    } catch (error) {
+      const limited = error?.statusCode === 429 || errcodeOf(error) === 'M_LIMIT_EXCEEDED'
+      if (!limited || attempt >= RATE_LIMIT_ATTEMPTS || stopped()) throw error
+      const asked = Number(error?.retryAfterMs ?? error?.body?.retry_after_ms)
+      await sleep(Math.min(RATE_LIMIT_MAX_WAIT_MS, asked > 0 ? asked : RATE_LIMIT_DEFAULT_MS))
+      if (stopped()) throw error
+    }
+  }
+}
+
 /**
  * Read a secret file, trimmed, or undefined when it is missing or empty.
  * @param path - file path.
@@ -60,8 +89,10 @@ export async function writeSecret(path, value) {
  * @returns `{ userId, deviceId, accessToken }`.
  */
 export async function passwordLogin({ homeserver, userId, password, deviceName, deviceId }) {
+  // A redirect would send the password on to wherever it points.
   const response = await fetch(new URL('/_matrix/client/v3/login', homeserver), {
     method: 'POST',
+    redirect: 'error',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       type: 'm.login.password',
@@ -77,27 +108,15 @@ export async function passwordLogin({ homeserver, userId, password, deviceName, 
 }
 
 /**
- * End a login on the server (the device is removed with it).
- * @param homeserver - base URL.
- * @param accessToken - the login's token.
- */
-export async function logout(homeserver, accessToken) {
-  const response = await fetch(new URL('/_matrix/client/v3/logout', homeserver), {
-    method: 'POST',
-    headers: { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' },
-    body: '{}',
-  })
-  if (!response.ok && response.status !== 401) throw new Error(`logout failed: ${response.status}`)
-}
-
-/**
  * The stored login, reused while it belongs to the configured account and
- * server; otherwise a new password login.
+ * server; otherwise a new password login. The account is matched as
+ * configured, not as the server spells the user id, since a mismatch would
+ * make a new device on every start.
  * @param options - `{ dir, homeserver, userId, passwordFile, deviceName, renew, info }`;
  *   `renew` logs in again on the stored device.
- * @returns `{ userId, deviceId, accessToken, homeserver }`.
+ * @returns `{ account, userId, deviceId, accessToken, homeserver }`.
  */
-async function loadLogin({ dir, homeserver, userId, passwordFile, deviceName, renew, info }) {
+export async function loadLogin({ dir, homeserver, userId, passwordFile, deviceName, renew, info }) {
   const path = join(dir, 'session.json')
   let stored
   try {
@@ -105,12 +124,12 @@ async function loadLogin({ dir, homeserver, userId, passwordFile, deviceName, re
   } catch {
     stored = undefined
   }
-  const same = stored?.homeserver === homeserver && stored?.userId === userId && typeof stored?.accessToken === 'string'
+  const same = stored?.homeserver === homeserver && stored?.account === userId && typeof stored?.accessToken === 'string'
   if (same && !renew) return stored
   const password = await readSecret(passwordFile)
   if (password === undefined) throw new Error(`no password in passwordFile (${passwordFile || 'not set'})`)
   const login = await passwordLogin({ homeserver, userId, password, deviceName, deviceId: same ? stored.deviceId : undefined })
-  const record = { homeserver, ...login }
+  const record = { homeserver, account: userId, ...login }
   await writeSecret(path, JSON.stringify(record, null, 2))
   info(`logged in as ${record.userId} on device ${record.deviceId}`)
   return record
@@ -149,7 +168,7 @@ function describe(part) {
  * @param options - `{ recoveryKeyFile, info, warn }`.
  * @returns `{ verified, backup }`.
  */
-async function bootstrapEncryption(client, { recoveryKeyFile, info, warn }) {
+export async function bootstrapEncryption(client, { recoveryKeyFile, info, warn }) {
   const crypto = client.crypto
   const machine = crypto.engine.machine
   const userId = await client.getUserId()
@@ -158,12 +177,19 @@ async function bootstrapEncryption(client, { recoveryKeyFile, info, warn }) {
   if (!(local.hasMaster && local.hasSelfSigning && local.hasUserSigning)) {
     const query = await client.doRequest('POST', '/_matrix/client/v3/keys/query', null, { device_keys: { [userId]: [] } })
     if (query?.master_keys?.[userId] === undefined) {
-      // A new identity: the recovery key is on disk before anything uses it.
-      const key = SecretStorageKey.createRandomKey()
-      recoveryKey = key.toBase58()
-      await writeSecret(recoveryKeyFile, recoveryKey)
-      await client.setAccountData(key.eventType(), JSON.parse(key.accountDataContent()))
-      await client.setAccountData('m.secret_storage.default_key', { key: key.keyId() })
+      if (recoveryKey !== undefined && await openSecretStorage(client, recoveryKey).catch(() => undefined) === undefined) {
+        // Overwriting it would lose the key for good; it may be another account's.
+        warn(`encryption not set up: ${recoveryKeyFile} holds a recovery key that does not open this account's secret storage; move that file away or point recoveryKeyFile elsewhere`)
+        return { verified: false, backup: false }
+      }
+      if (recoveryKey === undefined) {
+        // A new identity: the recovery key is on disk before anything uses it.
+        const key = SecretStorageKey.createRandomKey()
+        recoveryKey = key.toBase58()
+        await writeSecret(recoveryKeyFile, recoveryKey)
+        await client.setAccountData(key.eventType(), JSON.parse(key.accountDataContent()))
+        await client.setAccountData('m.secret_storage.default_key', { key: key.keyId() })
+      }
       await crypto.createIdentity(recoveryKey)
       info(`created the account's cross-signing keys; recovery key written to ${recoveryKeyFile}`)
     } else if (recoveryKey === undefined) {
@@ -339,6 +365,8 @@ function wrapClient(client, login, { dir, recoveryKeyFile, info, warn }) {
     return processing
   }
 
+  const limits = { stopped: () => stopping !== undefined }
+
   async function isEncrypted(roomId) {
     if (!encrypted.has(roomId)) encrypted.set(roomId, await client.crypto.isRoomEncrypted(roomId))
     return encrypted.get(roomId)
@@ -383,10 +411,10 @@ function wrapClient(client, login, { dir, recoveryKeyFile, info, warn }) {
     },
 
     async sendEvent(roomId, type, content) {
-      return client.sendEvent(roomId, type, content)
+      return whileRateLimited(() => client.sendEvent(roomId, type, content), limits)
     },
     async sendState(roomId, type, stateKey, content) {
-      return client.sendStateEvent(roomId, type, stateKey, content)
+      return whileRateLimited(() => client.sendStateEvent(roomId, type, stateKey, content), limits)
     },
     /** @returns a state event's content, or undefined when the room has none. */
     async getState(roomId, type, stateKey = '') {
@@ -407,7 +435,7 @@ function wrapClient(client, login, { dir, recoveryKeyFile, info, warn }) {
       return event?.raw ?? event
     },
     async redact(roomId, eventId) {
-      return client.redactEvent(roomId, eventId)
+      return whileRateLimited(() => client.redactEvent(roomId, eventId), limits)
     },
     async setTyping(roomId, typing, timeoutMs) {
       return client.setTyping(roomId, typing, timeoutMs)

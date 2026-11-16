@@ -53,9 +53,9 @@ export async function openState(path = join(dataDir(), 'state.json')) {
     get data() {
       return state
     },
-    /** Write the document atomically; writes are serialized. */
+    /** Write the document atomically; writes are serialized, and one that failed does not stop the next. */
     save() {
-      writing = writing.then(async () => {
+      writing = writing.catch(() => {}).then(async () => {
         await mkdir(dirname(path), { recursive: true, mode: 0o700 })
         const temporary = `${path}.${process.pid}.tmp`
         await writeFile(temporary, JSON.stringify(state, null, 2) + '\n', { mode: 0o600 })
