@@ -1,0 +1,9 @@
+# Bundle layer for @soffits/dsh-matrix-bot. The bot row's id is also its
+# settings namespace. The tools row registers matrix_send for every agent;
+# disable it, or mount `@soffits/dsh-matrix-bot/tools` in one agent preset,
+# to limit who gets it.
+- insert:
+    - id: matrix-bot
+      name: '@soffits/dsh-matrix-bot'
+    - id: matrix-bot-tools
+      name: '@soffits/dsh-matrix-bot/tools'
