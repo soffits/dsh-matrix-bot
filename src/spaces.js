@@ -58,6 +58,22 @@ export function commandStates(commands, sigil) {
  * @param deps - `{ requireMatrix, getStore, setting, notice, publishCommands, info, warn }`.
  */
 export function createSpaces({ requireMatrix, getStore, setting, notice, commands, sigil, helpText, info, warn }) {
+  /** The last claim of a room or Space by person: claims of one person run one at a time. */
+  const claims = new Map()
+
+  /**
+   * Run a claim after the person's earlier ones. An invite and the message
+   * already waiting in that room both claim it at once; one at a time, the
+   * later finds the room taken instead of making a second Space.
+   */
+  function oneAtATime(userId, task) {
+    const run = (claims.get(userId) ?? Promise.resolve()).then(task)
+    const settled = run.catch(() => {})
+    claims.set(userId, settled)
+    void settled.then(() => { if (claims.get(userId) === settled) claims.delete(userId) })
+    return run
+  }
+
   /** @returns the name of new Spaces and lobbies. */
   async function names() {
     const matrix = requireMatrix()
@@ -251,5 +267,12 @@ export function createSpaces({ requireMatrix, getStore, setting, notice, command
     await publishCommands(roomId)
   }
 
-  return { ensureSpace, createRoom, adoptSpace, onChild, onJoinedByInvite, publishCommands }
+  return {
+    ensureSpace,
+    createRoom,
+    adoptSpace: (userId, spaceId) => oneAtATime(userId, () => adoptSpace(userId, spaceId)),
+    onChild,
+    onJoinedByInvite: (roomId, userId) => oneAtATime(userId, () => onJoinedByInvite(roomId, userId)),
+    publishCommands,
+  }
 }

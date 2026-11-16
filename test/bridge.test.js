@@ -57,6 +57,19 @@ test('a first direct chat makes the person a private Space, links the chat as it
   host.dispose()
 })
 
+test('a message already in a direct chat when the invite arrives makes one Space and one prompt', async () => {
+  const { host, m } = await start()
+  const roomId = '!early:hs.example'
+  await m.invite(roomId, TESTER, { direct: true })
+  await m.message(roomId, 'hello')
+  await until(() => m.state.has(`${roomId}\u0000m.room.pinned_events\u0000`), 'the welcome')
+  await settle(30)
+  assert.equal(m.created.filter((entry) => entry.options.creation_content?.type === 'm.space').length, 1)
+  assert.equal(host.prompts.length, 1)
+  assert.equal(host.prompts[0].content[0].text, 'hello')
+  host.dispose()
+})
+
 test('a message becomes a prompt with its sender recorded, and the answer comes back as HTML', async () => {
   const { host, m } = await start()
   const roomId = await firstContact(m)
