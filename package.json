@@ -1,0 +1,70 @@
+{
+  "name": "@soffits/dsh-matrix-bot",
+  "version": "0.0.0",
+  "description": "Matrix bot for DeepSeek Harness: an end-to-end encrypted Matrix account, a private Space per person with one room per DSH session, streamed answers, commands, files, voice messages, tool approvals and agent questions.",
+  "type": "module",
+  "main": "./index.js",
+  "bin": {
+    "dsh-matrix": "./bin/dsh-matrix.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./tools": "./tools.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    "index.js",
+    "tools.js",
+    "src/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "engines": {
+    "node": ">=24",
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
+  "scripts": {
+    "test": "NODE_ENV=test node --import ./test/home.js --test \"test/*.test.js\"",
+    "check": "for f in index.js tools.js bin/*.js src/*.js test/*.js scripts/*.js; do node --check \"$f\" || exit 1; done",
+    "e2e": "node scripts/e2e.js"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0",
+    "@matrix-org/matrix-sdk-crypto-nodejs": "0.7.0",
+    "@vector-im/matrix-bot-sdk": "0.11.0-element.0",
+    "markdown-it": "15.0.3"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "matrix",
+    "e2ee",
+    "bot"
+  ],
+  "author": "Sakina",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soffits/dsh-matrix-bot.git"
+  },
+  "homepage": "https://github.com/soffits/dsh-matrix-bot#readme",
+  "bugs": {
+    "url": "https://github.com/soffits/dsh-matrix-bot/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
