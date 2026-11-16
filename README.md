@@ -109,7 +109,7 @@ Agents get the `matrix_send` tool. Other plugins can use the `matrixRooms` servi
 
 ## Where files live
 
-Everything is under `$DSH_HOME/matrix` (directories 0700, files 0600): `account/` holds the login (`session.json`), the sync position and the crypto store; `state.json` maps rooms to sessions and remembers each person's Space; `media/` keeps received files; `spool/` carries requests from `dsh-matrix`; `status.json` is the last state. Keep this directory with the DSH home: the crypto store is the bot's identity in encrypted rooms.
+Everything is under `$DSH_HOME/matrix`, whose directories are 0700 so only the user DSH runs as can read them (the bot's own files are 0600 as well): `account/` holds the login (`session.json`), the sync position and the crypto store; `state.json` maps rooms to sessions and remembers each person's Space; `media/` keeps received files; `spool/` carries requests from `dsh-matrix`; `status.json` is the last state. Keep this directory with the DSH home: the crypto store is the bot's identity in encrypted rooms.
 
 ## Removal
 

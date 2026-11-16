@@ -11,9 +11,10 @@
 
 ## Login and encryption
 
-- Password login through `/_matrix/client/v3/login`: Matrix Authentication Service answers it through its compatibility layer, and a bot cannot do the browser OAuth flow. The password is read from `passwordFile` only to log in; the access token and device id are kept in `session.json` (0600).
-- An access token that stops working (`M_UNKNOWN_TOKEN`) means a new login with the same device id, so the crypto store stays valid; if the server hands out another device id, the old crypto store is moved aside and a new device set up.
-- On the first start the bot creates its cross-signing keys (MSC3967 lets the first upload go without interactive auth, which MAS servers can't do for bots), secret storage with a new recovery key, and a server-side key backup whose key is kept in secret storage. The recovery key is written once to `recoveryKeyFile` (0600) and never logged or sent.
+- Password login through `/_matrix/client/v3/login`: Matrix Authentication Service answers it through its compatibility layer, and a bot cannot do the browser OAuth flow. The password is read from `passwordFile` only to log in; the access token and device id are kept in `session.json` (0600). The login follows no redirect, which would carry the password to wherever it points.
+- The stored login is matched to the account as configured, not as the server spells the user id: a mismatch (a localpart, other letter case) made a new device at every start, and Synapse allows an account only a few logins in a row.
+- An access token that stops working (`M_UNKNOWN_TOKEN`) means a new login with the same device id, so the crypto store stays valid; if the server hands out another device id, the SDK opens a crypto store of its own for that device and a new device is set up.
+- On the first start the bot creates its cross-signing keys (MSC3967 lets the first upload go without interactive auth, which MAS servers can't do for bots), secret storage with a new recovery key, and a server-side key backup whose key is kept in secret storage. The recovery key is written once to `recoveryKeyFile` (0600) and never logged or sent. A file there that does not open the account's secret storage (another account's key, say) is never overwritten: setup stops and says so. One that does open it, left by a setup that stopped halfway, is used.
 - On a new device of an account that already has cross-signing, the bot reads the recovery key from `recoveryKeyFile`, imports the cross-signing keys from secret storage, signs its device and turns on the backup. Without the key it runs unverified and says so in its status; it never resets the account's cross-signing by itself.
 - Rooms the bot creates are encrypted from their first event.
 - A device that verifies itself with the recovery key imports the cross-signing keys through the crypto machine directly, not the SDK's helper: that helper keeps a native device object alive, and one alive at exit makes the crypto library abort the process.
@@ -28,12 +29,14 @@
 - Each allowed person gets their own private Space, never a shared one (like each person's own Telegram chat). The bot makes it when the person first invites it to a room or a direct chat, invites them and gives them power level 100. A Space the person made and invited the bot to is adopted instead, when the bot may add rooms to it; otherwise the bot says which power level it needs.
 - A Space has a lobby room (the bot's display name), which is also a session; `help` is pinned there.
 - A room inside a person's Space is one of that person's sessions: only that person's messages count there, others are ignored. A room the person creates in their Space is joined when it appears as a child (`m.space.child`), or when they invite the bot; `new` makes one from any client.
+- One person's room claims and Space adoptions run one at a time: an invite and the message already waiting in that room both claim it, and side by side they made two Spaces.
 - Any other room an allowed person invites the bot to (a direct chat or not) becomes that person's room and is added to their Space.
 - One room is one session; the room → session map lives in `state.json`.
 
 ## Messages
 
 - Replies stream: the first text of a turn is sent as a message and later text edits it (`m.replace`), at most every 2 s, with the full answer as the last edit. Matrix clients show edits in place, so this is the counterpart of Telegram's streamed drafts. A typing notice runs while the turn works.
+- Messages, state events and redactions wait out a rate limit (429) for the time the server asks, up to 8 tries. Synapse allows 0.2 messages a second after a burst of 10 by default, and edits, reactions and redactions count, so a streamed answer reaches it. Other failures are not retried, since a send whose answer was lost may have arrived.
 - Messages longer than one event allows are split; the HTML part counts against the size, as the event is encrypted whole.
 - Working signs are reactions, as in the Delta Chat bot: ⏳ when a message is taken, 👀 when it is steered into a running turn, redacted once the answer is out. Read receipts go back only after a message reached DSH.
 - Edits to a sent message are not new prompts (rel_type `m.replace` is ignored).
