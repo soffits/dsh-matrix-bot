@@ -17,7 +17,7 @@
 - On a new device of an account that already has cross-signing, the bot reads the recovery key from `recoveryKeyFile`, imports the cross-signing keys from secret storage, signs its device and turns on the backup. Without the key it runs unverified and says so in its status; it never resets the account's cross-signing by itself.
 - Rooms the bot creates are encrypted from their first event.
 - A device that verifies itself with the recovery key imports the cross-signing keys through the crypto machine directly, not the SDK's helper: that helper keeps a native device object alive, and one alive at exit makes the crypto library abort the process.
-- Stopping waits until the sync loop is idle (the SDK's own stop still processes the request in flight), saves no sync token for an unprocessed batch, then closes the crypto store; a new connection waits for the old one's stop, as both would use one store. An open store is also closed on process exit, since the native library aborts when it is dropped outside its runtime.
+- Stopping lets no further sync batch be processed (the SDK's own stop would still process the request in flight), saves no sync token for an unprocessed one, waits for the batch being processed and the crypto tasks, then closes the crypto store. A new connection to the same account directory waits for that stop, process-wide, since a reloaded plugin connects while the old instance is still stopping and both would use one store. An open store is also closed on process exit, since the native library aborts when it is dropped outside its runtime.
 
 ## Spaces and rooms (power levels)
 

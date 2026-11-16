@@ -12,6 +12,14 @@ import { LogLevel, LogService, MatrixClient, RustSdkCryptoStorageProvider, Simpl
 const require = createRequire(import.meta.url)
 const { BackupDecryptionKey, SecretStorageItems, SecretStorageKey, StoreType } = require('@matrix-org/matrix-sdk-crypto-nodejs')
 
+/**
+ * Stops in progress by account directory. Process-wide (and kept across
+ * reloads of this module), because a reloaded plugin connects again while
+ * the old instance is still stopping, and both would open one crypto store.
+ */
+const STOPPING = Symbol.for('dsh-matrix-bot.stopping')
+globalThis[STOPPING] ??= new Map()
+
 /** Account data name of the key backup's secret. */
 const BACKUP_SECRET = 'm.megolm_backup.v1'
 const BACKUP_ALGORITHM = 'm.megolm_backup.v1.curve25519-aes-sha2'
@@ -236,6 +244,7 @@ async function ensureBackup(client, recoveryKey, warn) {
  */
 export async function connect(options) {
   const { dir, homeserver, info, warn } = options
+  await globalThis[STOPPING].get(dir)
   quietSdk(warn)
   await mkdir(dir, { recursive: true, mode: 0o700 })
   await chmod(dir, 0o700)
@@ -264,7 +273,7 @@ export async function connect(options) {
  * @param login - `{ userId, deviceId, accessToken, homeserver }`.
  * @param options - connect options.
  */
-function wrapClient(client, login, { recoveryKeyFile, info, warn }) {
+function wrapClient(client, login, { dir, recoveryKeyFile, info, warn }) {
   let encryption = { verified: false, backup: false }
   const encrypted = new Map()
   // The SDK's stop only ends the sync loop after the request in flight, and
@@ -325,13 +334,17 @@ function wrapClient(client, login, { recoveryKeyFile, info, warn }) {
     },
     /** Stop syncing; resolves once the client is idle and its crypto store closed. */
     stop() {
-      stopping ??= (async () => {
+      if (stopping !== undefined) return stopping
+      stopping = (async () => {
         client.stop()
-        await Promise.allSettled([syncing, processing])
+        await Promise.allSettled([processing])
         const engine = client.crypto?.engine
         if (engine !== undefined) await Promise.allSettled([engine.keyBackupWaiter, engine.lock.acquire('sync', () => {})])
         close()
       })()
+      const registry = globalThis[STOPPING]
+      const done = stopping.finally(() => { if (registry.get(dir) === done) registry.delete(dir) })
+      registry.set(dir, done)
       return stopping
     },
 
