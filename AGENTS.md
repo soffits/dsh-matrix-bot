@@ -4,7 +4,8 @@ A DeepSeek Harness (DSH) plugin that lets people talk to DSH sessions over Matri
 
 ## Layout
 
-- `index.js` → `src/app.js`: the bot row (`matrix-bot`). `createBridge(ctx, config, connect)` holds the runtime: the connection's lifecycle, incoming events (invites, messages, reactions, Space changes), dispatch to sessions, the `matrixRooms` service and the spool. `apply` passes the real `connect`; tests pass a fake (`test/fake.js`).
+- `index.js` → `src/app.js`: the bot row (`matrix-bot`). `createBridge(ctx, config, connect)` holds the runtime: the connection's lifecycle, sessions of rooms, the `matrixRooms` service, the spool and the Host listeners. `apply` passes the real `connect`; tests pass a fake (`test/fake.js`).
+- `src/events.js`: incoming events (invites, messages, reactions, Space changes) checked against the allowlist and handed to commands, prompts or the room's session.
 - `src/matrix.js`: everything that talks to the homeserver through `@vector-im/matrix-bot-sdk`: password login and `session.json`, the sync and crypto stores, encryption setup (cross-signing, secret storage, recovery key, key backup), a clean stop, and the small call surface the rest uses.
 - `src/spaces.js`: each person's Space and lobby, adopting their own Space, joining rooms that appear in it, `!new` rooms, and publishing the command list (MSC4332, MSC4391).
 - `src/turns.js`: turn delivery, streaming by edits, typing notices. `src/outbound.js`: message, edit, file and reaction content. `src/reactions.js`: working reactions.
