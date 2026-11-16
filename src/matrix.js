@@ -238,6 +238,43 @@ async function ensureBackup(client, recoveryKey, warn) {
 }
 
 /**
+ * Count the calls running in a crypto machine, so it can be closed when none
+ * does. After `drain` starts, new calls fail at once.
+ * @param machine - the SDK's `OlmMachine`.
+ * @returns `{ drain }`: resolves when no call runs any more.
+ */
+export function trackCalls(machine) {
+  let running = 0
+  let draining = false
+  const idle = []
+  const proto = Object.getPrototypeOf(machine)
+  for (const name of Object.getOwnPropertyNames(proto)) {
+    const original = Object.getOwnPropertyDescriptor(proto, name)?.value
+    if (name === 'constructor' || name === 'close' || typeof original !== 'function') continue
+    Object.defineProperty(machine, name, {
+      configurable: true,
+      writable: true,
+      value(...args) {
+        if (draining) throw new Error('the crypto store is closing')
+        const result = original.apply(machine, args)
+        if (typeof result?.then !== 'function') return result
+        running += 1
+        return Promise.resolve(result).finally(() => {
+          running -= 1
+          if (running === 0) for (const resolve of idle.splice(0)) resolve()
+        })
+      },
+    })
+  }
+  return {
+    async drain() {
+      draining = true
+      while (running > 0) await new Promise((resolve) => idle.push(resolve))
+    },
+  }
+}
+
+/**
  * Connect to the homeserver.
  * @param options - `{ dir, homeserver, userId, passwordFile, deviceName, recoveryKeyFile, info, warn }`.
  * @returns the connection; call `start(handlers)` to begin syncing.
@@ -278,15 +315,15 @@ function wrapClient(client, login, { dir, recoveryKeyFile, info, warn }) {
   const encrypted = new Map()
   // The SDK's stop only ends the sync loop after the request in flight, and
   // would still process its answer. A stopping client processes nothing and
-  // saves no sync token, so the next run gets those events again, and the
-  // crypto store is closed only once the loop is idle: two machines on one
-  // store, or one closed under a running task, break it.
+  // saves no sync token, so the next run gets those events again. The crypto
+  // store is closed only when no call into it runs: closing it under a
+  // running call corrupts memory, and one dropped by the garbage collector or
+  // at exit, outside the library's runtime, aborts the process.
   let stopping
-  let syncing = Promise.resolve()
   let processing = Promise.resolve()
+  let calls
   client.persistTokenAfterSync = true
-  // The native crypto library aborts the whole process when its store is
-  // dropped at exit outside its runtime, so an open store is closed first.
+  client.once('crypto.ready', () => { calls = trackCalls(client.crypto.engine.machine) })
   let closed = false
   const close = () => {
     if (closed) return
@@ -295,9 +332,7 @@ function wrapClient(client, login, { dir, recoveryKeyFile, info, warn }) {
     client.crypto?.engine?.machine?.close?.()
   }
   process.on('exit', close)
-  const doSync = client.doSync.bind(client)
   const processSync = client.processSync.bind(client)
-  client.doSync = (token) => (syncing = doSync(token))
   client.processSync = (raw, emitFn) => {
     if (stopping !== undefined) return Promise.reject(new Error('stopping'))
     processing = processSync(raw, emitFn)
@@ -337,9 +372,8 @@ function wrapClient(client, login, { dir, recoveryKeyFile, info, warn }) {
       if (stopping !== undefined) return stopping
       stopping = (async () => {
         client.stop()
-        await Promise.allSettled([processing])
-        const engine = client.crypto?.engine
-        if (engine !== undefined) await Promise.allSettled([engine.keyBackupWaiter, engine.lock.acquire('sync', () => {})])
+        await Promise.allSettled([processing, client.crypto?.engine?.keyBackupWaiter])
+        await calls?.drain()
         close()
       })()
       const registry = globalThis[STOPPING]

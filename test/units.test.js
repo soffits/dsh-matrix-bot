@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { COMMANDS, helpText, parseCommand } from '../src/commands.js'
 import { composePrompt, describeReply, ownText } from '../src/inbound.js'
+import { trackCalls } from '../src/matrix.js'
 import { editContent, mediaKind, textContent } from '../src/outbound.js'
 import { parseAnswer, questionReactions, questionText } from '../src/prompts.js'
 import { childLevels, commandStates, serverOf } from '../src/spaces.js'
@@ -170,4 +171,26 @@ test('room session titles keep the Matrix-<person>-<task> form', async () => {
   events.push({ type: 'session/title', data: { title: 'Printer repair', source: { kind: 'provider' }, messageSeqs: [3] } })
   syncTitle({ service, session, person: 'Alex', placeholder: 'Lobby', previous: placeholder })
   assert.equal(service.get().title, 'Matrix-Alex-Printer repair')
+})
+
+test('the crypto store closes only after the calls running in it end, and takes no new ones', async () => {
+  let finish
+  class Machine {
+    work() { return new Promise((resolve) => { finish = resolve }) }
+    count() { return 1 }
+    close() {}
+  }
+  const machine = new Machine()
+  const calls = trackCalls(machine)
+  assert.equal(machine.count(), 1)
+  const running = machine.work()
+  let drained = false
+  const drain = calls.drain().then(() => { drained = true })
+  await new Promise((resolve) => setTimeout(resolve, 10))
+  assert.equal(drained, false)
+  assert.throws(() => machine.work(), /closing/u)
+  finish('done')
+  assert.equal(await running, 'done')
+  await drain
+  assert.equal(drained, true)
 })

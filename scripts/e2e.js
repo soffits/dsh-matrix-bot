@@ -32,7 +32,7 @@ const { MatrixClient, RustSdkCryptoStorageProvider, SimpleFsStorageProvider, Log
 const { createRequire } = await import('node:module')
 const { StoreType } = createRequire(import.meta.url)('@matrix-org/matrix-sdk-crypto-nodejs')
 const { createBridge } = await import('../src/app.js')
-const { connect } = await import('../src/matrix.js')
+const { connect, trackCalls } = await import('../src/matrix.js')
 const { makeHost, settle, until } = await import('../test/fake.js')
 LogService.setLevel(LogLevel.ERROR)
 
@@ -131,7 +131,7 @@ async function personClient(base, username, password) {
   client.on('room.event', (roomId, event) => timeline.push({ roomId, event }))
   client.on('room.encrypted_event', (roomId, event) => timeline.push({ roomId, raw: event }))
   await client.start()
-  return { client, timeline, userId: login.user_id }
+  return { client, timeline, userId: login.user_id, calls: trackCalls(client.crypto.engine.machine) }
 }
 
 /** Start the real bot on a fake DSH Host. */
@@ -263,7 +263,8 @@ try {
   await until(() => host.prompts.some((prompt) => prompt.content[0].text === 'to the new device'), 'the prompt on the new device', 3000)
   log('a new device verified itself with the recovery key and reads the room')
   person.client.stop()
-  await settle(2500)
+  await settle(1500)
+  await person.calls.drain()
   person.client.crypto.engine.machine.close()
   log('all checks passed')
 } catch (error) {
