@@ -88,20 +88,6 @@ export function mayBeSilent(text) {
 }
 
 /**
- * When a message was sent, for the agent: the date and time in this
- * process's time zone, with the zone's name.
- * @param timestamp - milliseconds since the epoch.
- * @returns the time as text, or undefined without a timestamp.
- */
-export function formatMoment(timestamp) {
-  if (!Number.isFinite(timestamp)) return undefined
-  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', weekday: 'short' }).formatToParts(new Date(timestamp))
-  const part = (type) => parts.find((entry) => entry.type === type)?.value ?? ''
-  return `${part('weekday')} ${part('year')}-${part('month')}-${part('day')} ${part('hour')}:${part('minute')} (${zone})`
-}
-
-/**
  * Split text into messages no longer than the limit, preferring paragraph,
  * then line, then word boundaries.
  * @param text - Markdown or plain text.

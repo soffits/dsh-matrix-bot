@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { COMMANDS, helpText, parseCommand } from '../src/commands.js'
-import { composePrompt, describeReply, ownText } from '../src/inbound.js'
+import { composePrompt, ownText, replyInfo } from '../src/inbound.js'
 import { bootstrapEncryption, loadLogin, trackCalls, whileRateLimited } from '../src/matrix.js'
 import { editContent, mediaKind, textContent } from '../src/outbound.js'
 import { parseAnswer, questionReactions, questionText } from '../src/prompts.js'
@@ -109,9 +109,18 @@ test('replies say whose message they answer, with the full text of a recorded se
   assert.equal(ownText({ body: '> <@a:x> earlier\n> more\n\nmy answer', 'm.relates_to': { 'm.in_reply_to': { event_id: '$e' } } }), 'my answer')
   assert.equal(ownText({ body: '> quoting by hand' }), '> quoting by hand')
   const mine = { sender: '@bot:x', content: { msgtype: 'm.text', body: 'short' } }
-  assert.equal(describeReply(mine, { botId: '@bot:x' }), '[Replying to your earlier message:]\nshort')
-  assert.equal(describeReply(mine, { botId: '@bot:x', sentRecord: { job: 'daily', text: 'the whole reminder' } }), '[Replying to a message job "daily" sent here:]\nthe whole reminder')
-  assert.equal(describeReply({ sender: '@a:x', content: { msgtype: 'm.image', body: 'cat.jpg' } }, { botId: '@bot:x', names: { '@a:x': 'Alex' } }), '[Replying to Alex:]\n[image "cat.jpg"]')
+  assert.deepEqual(replyInfo({ ...mine, origin_server_ts: 5 }, { botId: '@bot:x' }), { from: { role: 'assistant' }, sentAt: 5, text: 'short' })
+  assert.deepEqual(replyInfo(mine, { botId: '@bot:x', sentRecord: { job: 'daily', text: 'the whole reminder' } }), {
+    from: { kind: 'cron-job', channel: 'cron', id: 'daily', name: 'daily' },
+    text: 'the whole reminder',
+    details: ['posted by the bot on behalf of another sender'],
+  })
+  assert.deepEqual(replyInfo({ sender: '@a:x', content: { msgtype: 'm.image', body: 'cat.jpg' } }, { botId: '@bot:x', names: { '@a:x': 'Alex' } }), {
+    from: { kind: 'matrix-user', channel: 'matrix', id: '@a:x', name: 'Alex' },
+    details: ['contains image "cat.jpg"'],
+  })
+  assert.deepEqual(replyInfo({ sender: '@me:x', content: { body: 'mine' } }, { botId: '@bot:x', senderId: '@me:x' }).from, { role: 'sender' })
+  assert.equal(replyInfo(undefined), undefined)
 })
 
 test('a picture becomes a prompt with the file kept on disk and an image attachment', async () => {
