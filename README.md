@@ -78,7 +78,7 @@ Commands start with `!`, which works in every Matrix client. `/` works too in cl
 | `!allow`, `!deny` | Answer the waiting tool request |
 | `!id`, `!ping`, `!restart` | Ids, a check, and reconnecting |
 
-Lists such as `!model` are numbered; the same command with the numbers picks one (`!model 2 5`).
+Lists such as `!model` are numbered; the same command with the numbers picks one (`!model 2 5`). A model or effort picked in a room applies to that room's session only; the default for new sessions stays as it is.
 
 ## Sending from scripts, agents and other plugins
 

@@ -2,8 +2,8 @@
  * Session controls from a room: model, reasoning effort, access mode and
  * context use, picked from numbered lists.
  */
-import { defaultModelOf, effortChoices, effortName, findModel, modelName, pickedSelection, sessionModelOf } from './models.js'
-import { controllerOf, currentPermission, permissionOptions, setPermission } from './sessions.js'
+import { defaultModelOf, effortChoices, effortName, findModel, modelName, pickedSelection, selectSessionModel, sessionModelOf } from './models.js'
+import { currentPermission, permissionOptions, setPermission } from './sessions.js'
 
 /** @returns `n` as a 1-based list index into `items`, or undefined. */
 export function pick(items, value) {
@@ -81,18 +81,12 @@ async function contextUse(bridge, roomId, current) {
   return { windowSize, used }
 }
 
-/** Apply a model selection the way the Web picker does, and remember it for /new. */
+/** Switch the room's session to a model, and remember it for /new; the default for new sessions stays. */
 async function selectModel(bridge, roomId, selection) {
   const store = bridge.store()
   store.data.picks[roomId] = selection
   await store.save()
-  const agent = await bridge.ensureAgent(roomId, { claim: true })
-  const controller = controllerOf(bridge.ctx)
-  if (typeof controller?.selectModel === 'function') {
-    await controller.selectModel({ sessionId: agent.session?.id ?? agent.id, ...selection })
-    return
-  }
-  agent.model.select(selection)
+  await selectSessionModel(bridge.ctx, await bridge.ensureAgent(roomId, { claim: true }), selection)
 }
 
 /** Handlers of the control commands, merged into the command table. */

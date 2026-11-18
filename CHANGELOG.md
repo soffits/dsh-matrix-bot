@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.1
+
+- `!model` and `!effort` switch only the room's session. They used to go through the Web UI's model picker, which also saves every pick as the default for new sessions, so a switch in one room changed the model every other new session started on. The model is still checked with the host before the switch, and `/reset` in the room still starts on the room's pick.
+
 ## 0.2.0
 
 - Prompts carry metadata only: the sender on `source.principal` (the room is now `chat: { id, name }`, was `room`), and the send time and the replied-to message on `source.envelope` (`sentAt`, `replyTo`), the shape [dsh-message-context](https://github.com/soffits/dsh-message-context) reads. The bot no longer adds its own `matrix-sender` notice or reply text; install dsh-message-context to show the model who wrote each message.
