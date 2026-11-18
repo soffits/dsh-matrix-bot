@@ -273,10 +273,13 @@ export function makeHost({ config = {} } = {}) {
       agents.set(forkId, makeAgent(forkId, agents.get(sessionId).session.header.cwd))
       return { sessionId: forkId }
     },
+    /** The Web UI's model switch, which also saves the pick as the default for new sessions. */
     async selectModel(request) {
-      selected.push(request)
-      agents.get(request.sessionId).model.select(request)
-      return request
+      const { sessionId, ...selection } = request
+      await services.llm.resolveCallConfig(selection)
+      agents.get(sessionId).model.select(selection)
+      await services.agentDefaultModel.saveSelection(selection)
+      return { selected: selection }
     },
     async modelCatalog() {
       return {
@@ -300,6 +303,18 @@ export function makeHost({ config = {} } = {}) {
       refresh: async (session) => session.append('session/title', { title: 'Weekend plans', source: { kind: 'generated' }, messageSeqs: [1] }),
     },
     sessionController: controller,
+    agentDefaultModel: {
+      saved: [],
+      currentSelection: () => ({ provider: 'p1', model: 'm1' }),
+      async saveSelection(selection) { this.saved.push(selection) },
+    },
+    llm: {
+      /** The host's routing check, which every model switch runs first. */
+      async resolveCallConfig(selection) {
+        selected.push(selection)
+        return {}
+      },
+    },
     subagents: { listChildren: async (parentId) => children.get(parentId) ?? [] },
     sessionQuery: { readSurface: async (sessionId) => ({ events: agents.get(sessionId)?.session.snapshotEvents() ?? [] }) },
     attachments: {

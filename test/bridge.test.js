@@ -193,6 +193,22 @@ test('!new makes a new encrypted room in the Space and invites the person; /rese
   host.dispose()
 })
 
+test('!model and !effort switch only the room\'s session, not the default for new sessions', async () => {
+  const { host, m } = await start()
+  const roomId = await firstContact(m)
+  await m.message(roomId, 'hello')
+  const agent = host.agents.get(host.prompts[0].sessionId)
+  await m.message(roomId, '!model 2 2')
+  assert.deepEqual(agent.model.current(), { provider: 'p2', model: 'm3' })
+  await until(() => bodies(m, roomId).includes('🤖 Model: Model Three'), 'the confirmation')
+  await m.message(roomId, '!model 1 1')
+  await m.message(roomId, '!effort 3')
+  assert.deepEqual(agent.model.current(), { provider: 'p1', model: 'm1', reasoningEffort: 'high' })
+  assert.deepEqual(host.selected.at(-1), { provider: 'p1', model: 'm1', reasoningEffort: 'high' }, 'checked with the host first')
+  assert.deepEqual(host.services.agentDefaultModel.saved, [], 'the default is left alone')
+  host.dispose()
+})
+
 test('a Space the person made is adopted when the bot may add rooms, otherwise the bot asks for the power level', async () => {
   const { host, m } = await start()
   await m.invite('!theirs:hs.example', TESTER, { space: true, powerLevels: { users: { [TESTER]: 100 }, state_default: 50 } })
