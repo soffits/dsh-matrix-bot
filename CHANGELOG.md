@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Session handling (finding, creating and claiming a room's session, admitting prompts once, recording notes, reading answers and titles) and the `dsh-matrix` request spool now come from `@soffits/dsh-channel-core` instead of a copy.
 - A message for an archived session that this DSH cannot unarchive is logged instead of silently going unanswered.
