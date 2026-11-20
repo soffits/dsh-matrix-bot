@@ -5,7 +5,6 @@ import { createModelCatalog, createPrincipalTagger, createSpool, readLive, resol
 import { COMMANDS, SIGIL, helpText } from './commands.js'
 import { dataDir, name, SERVICE_NAME, spoolDir } from './constants.js'
 import { createEvents } from './events.js'
-import { createHelpers } from './helpers.js'
 import { connect as realConnect } from './matrix.js'
 import { createOperations } from './operations.js'
 import { createOutbound } from './outbound.js'
@@ -13,6 +12,7 @@ import { createPrompts } from './prompts.js'
 import { createReactions } from './reactions.js'
 import { createRoomSession } from './sessions.js'
 import { createSpaces } from './spaces.js'
+import { createSubagentStatus } from './subagents.js'
 import { openState } from './state.js'
 import { createTitles } from './titles.js'
 import { createTurns } from './turns.js'
@@ -127,7 +127,7 @@ export function createBridge(ctx, config, connect) {
     setTyping: async (roomId, typing, ms) => matrix?.setTyping(roomId, typing, ms),
   })
   const { currentTurn } = turns
-  const helpers = createHelpers({ ctx, getStore, isRunning, outbound, currentTurn, reportError })
+  const subagents = createSubagentStatus({ ctx, getStore, isRunning, outbound, currentTurn, reportError })
   const operations = createOperations({
     ctx,
     getStore,
@@ -371,7 +371,6 @@ export function createBridge(ctx, config, connect) {
     currentTurn,
     ensureAgent,
     reactions,
-    helpers,
     spaces,
     notice,
     say: (roomId, text) => queueOut(roomId, () => sendText(roomId, text)),
@@ -406,8 +405,8 @@ export function createBridge(ctx, config, connect) {
   }, { global: true })
 
   ctx.on('agent/pre-step', (payload, next) => principals.preStep(payload, next), { global: true })
-  ctx.on('subagent/start', (event) => fireAndForget('helpers', () => helpers.onStart(event)), { global: true })
-  ctx.on('subagent/end', (event) => fireAndForget('helpers', () => helpers.onEnd(event)), { global: true })
+  ctx.on('subagent/start', (event) => fireAndForget('subagent status', () => subagents.onStart(event)), { global: true })
+  ctx.on('subagent/end', (event) => fireAndForget('subagent status', () => subagents.onEnd(event)), { global: true })
 
   ctx.on('settings/document-updated', (namespace) => {
     if (namespace === name) fireAndForget('settings', () => applySettings())
@@ -420,7 +419,7 @@ export function createBridge(ctx, config, connect) {
       lifetime.abort()
       if (retryTimer !== undefined) clearTimeout(retryTimer)
       prompts.cancelAll()
-      helpers.dispose()
+      subagents.dispose()
       turns.dispose()
       stopRuntime()
     }
