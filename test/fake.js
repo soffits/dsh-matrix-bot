@@ -3,6 +3,7 @@
  * file has no tests of its own.
  */
 import { randomUUID } from 'node:crypto'
+import { followupThroughGate, makeAgentModel, makeTitleService } from '@soffits/dsh-channel-core/testing'
 
 /** Wait until queued promise work has run. */
 export function settle(ms = 30) {
@@ -177,10 +178,12 @@ export function makeMatrix() {
 
 /**
  * Fake agent with an inbox, a session log and the methods the bridge calls.
+ * Queued messages pass the `agent/pre-step` gate as in DSH.
  * @param sessionId - session id.
  * @param cwd - working directory.
+ * @param hostPreSteps - the host-wide `agent/pre-step` handlers registered now.
  */
-export function makeAgent(sessionId, cwd) {
+export function makeAgent(sessionId, cwd, hostPreSteps = () => []) {
   const events = []
   const handlers = new Map()
   const agent = {
@@ -192,8 +195,9 @@ export function makeAgent(sessionId, cwd) {
     session: {
       id: sessionId,
       header: { cwd },
+      nextGeneratedTitle: 'Weekend plans',
       snapshotEvents: () => events,
-      append: (type, data) => events.push({ type, data }),
+      append: (type, data) => events.push({ type, data, seq: events.length + 1 }),
     },
     inbox: {
       nextStep: [],
@@ -208,7 +212,7 @@ export function makeAgent(sessionId, cwd) {
       },
     },
     followup(message) {
-      agent.received.push(message)
+      followupThroughGate(agent, message, [...(handlers.get('agent/pre-step') ?? []), ...hostPreSteps()])
     },
     steer(message) {
       agent.steered.push(message)
@@ -223,16 +227,12 @@ export function makeAgent(sessionId, cwd) {
     ctx: {
       on(name, handler) {
         handlers.set(name, [...(handlers.get(name) ?? []), handler])
-        return () => {}
+        return () => handlers.set(name, handlers.get(name).filter((item) => item !== handler))
       },
     },
     handlers,
-    model: {
-      selection: undefined,
-      current: () => agent.model.selection ?? { provider: 'p1', model: 'm1' },
-      select: (selection) => { agent.model.selection = selection },
-    },
   }
+  agent.model = makeAgentModel(agent.session, { provider: 'p1', model: 'm1' })
   return agent
 }
 
@@ -246,13 +246,14 @@ export function makeHost({ config = {} } = {}) {
   const prompts = []
   const logs = []
   const listeners = new Map()
+  const hostPreSteps = () => listeners.get('agent/pre-step') ?? []
   const disposers = []
   const provided = new Map()
   const selected = []
   const controller = {
     async create({ cwd }) {
       const sessionId = `session-${randomUUID().slice(0, 8)}`
-      agents.set(sessionId, makeAgent(sessionId, cwd))
+      agents.set(sessionId, makeAgent(sessionId, cwd, hostPreSteps))
       return { sessionId }
     },
     async resolveAgent(sessionId) {
@@ -270,7 +271,7 @@ export function makeHost({ config = {} } = {}) {
     },
     async fork({ sessionId }) {
       const forkId = `${sessionId}-fork`
-      agents.set(forkId, makeAgent(forkId, agents.get(sessionId).session.header.cwd))
+      agents.set(forkId, makeAgent(forkId, agents.get(sessionId).session.header.cwd, hostPreSteps))
       return { sessionId: forkId }
     },
     /** The Web UI's model switch, which also saves the pick as the default for new sessions. */
@@ -294,14 +295,9 @@ export function makeHost({ config = {} } = {}) {
   }
   /** Helper catalogs by parent session id. */
   const children = new Map()
-  const titleOf = (session) => session.snapshotEvents().filter((event) => event.type === 'session/title').at(-1)?.data
   const services = {
     agents: { get: (id) => agents.get(id) },
-    sessionTitle: {
-      get: titleOf,
-      rename: (session, title) => session.append('session/title', { title, source: { kind: 'user' }, messageSeqs: [] }),
-      refresh: async (session) => session.append('session/title', { title: 'Weekend plans', source: { kind: 'generated' }, messageSeqs: [1] }),
-    },
+    sessionTitle: makeTitleService(),
     sessionController: controller,
     agentDefaultModel: {
       saved: [],
