@@ -4,7 +4,7 @@
  * once all of them are done. `/agents` lists a session's helpers on demand.
  */
 import { sessionModelOf } from '@soffits/dsh-channel-core'
-import { recentAssistantTexts } from './sessions.js'
+import { recentAssistantTexts } from '@soffits/dsh-channel-core'
 import { clip } from './text.js'
 
 /** Pause that lets several starts or ends share one edit. */

@@ -11,8 +11,8 @@ A DeepSeek Harness (DSH) plugin that lets people talk to DSH sessions over Matri
 - `src/turns.js`: turn delivery, streaming by edits, typing notices. `src/outbound.js`: message, edit, file and reaction content. `src/reactions.js`: working reactions.
 - `src/prompts.js`: approvals and questions answered by reply or reaction. `src/commands.js` and `src/controls.js`: room commands.
 - `src/inbound.js`: one Matrix message → prompt text, attachments and reply context. `src/sender.js`: the `matrix-user` principal.
-- `@soffits/dsh-channel-core` (soffits/dsh-channel-core) holds what this bot shares with soffits/dsh-telegram-bot: the final answer of a turn and `[SILENT]`, session models and the catalog, voice transcription, and the sender principal, envelope and tagger. A fix to that logic goes there, not into a copy here.
-- `src/sessions.js`, `src/helpers.js`, `src/titles.js`, `src/spool.js`, `src/state.js`, `src/operations.js`: adapted from the Telegram bot to rooms and not yet in the core; keep them in step with it where the logic is the same.
+- `@soffits/dsh-channel-core` (soffits/dsh-channel-core) holds what this bot shares with soffits/dsh-telegram-bot: the final answer of a turn and `[SILENT]`, session models and the catalog, voice transcription, the sender principal, envelope and tagger, the session helpers (resolve, create, claim, admit, record, read) and the file spool. A fix to that logic goes there, not into a copy here. `src/sessions.js` keeps only the room's side (a room's new session, its pending prompts, titles, access modes).
+- `src/helpers.js`, `src/titles.js`, `src/state.js`, `src/operations.js`: adapted from the Telegram bot to rooms and not yet in the core; keep them in step with it where the logic is the same.
 - `tools.js`: the `matrix-bot-tools` row (`matrix_send`). `bin/dsh-matrix.js`: the command line. `scripts/e2e.js`: the real bot against a local Tuwunel.
 
 ## Checks

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Session handling (finding, creating and claiming a room's session, admitting prompts once, recording notes, reading answers and titles) and the `dsh-matrix` request spool now come from `@soffits/dsh-channel-core` instead of a copy.
+- A message for an archived session that this DSH cannot unarchive is logged instead of silently going unanswered.
+
 ## 0.2.2
 
 - The answer, silent marker, model, voice and sender logic now comes from `@soffits/dsh-channel-core`, the package shared with the Telegram bot, instead of a copy. While an answer streams, a trailing `[SILENT]` that is still being written after real text no longer flashes in the room.
