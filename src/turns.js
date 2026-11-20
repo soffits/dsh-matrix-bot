@@ -5,8 +5,9 @@
  * working reactions of its messages.
  */
 import { basename } from 'node:path'
+import { cutSilent, messageAnswer } from '@soffits/dsh-channel-core'
 import { REQUEST_PREFIX, STREAM_EDIT_MS, TYPING_MS } from './constants.js'
-import { clip, localImagePaths, mayBeSilent, messageAnswer, splitText, stripSilent } from './text.js'
+import { clip, localImagePaths, splitText } from './text.js'
 
 /**
  * The event id a request id of a Matrix prompt names.
@@ -115,8 +116,8 @@ export function createTurns({ ctx, getStore, isRunning, setting, outbound, react
   async function flush(roomId, turn) {
     const stream = turn.stream
     if (stream.closed) return
-    const text = stream.text.trim()
-    if (mayBeSilent(text) || text === stream.shown) return
+    const { text } = cutSilent(stream.text, { streaming: true })
+    if (text.length === 0 || text === stream.shown) return
     const [visible] = splitText(text)
     stream.lastFlush = Date.now()
     if (stream.eventId === undefined) {
@@ -273,7 +274,7 @@ export function createTurns({ ctx, getStore, isRunning, setting, outbound, react
     }
     // Text the session already sent here with its files is not repeated.
     const sent = new Set(turn.sentTexts.map(sameText))
-    const { text, silent } = stripSilent(turn.texts.filter((part) => !sent.has(sameText(part))).join('\n\n'))
+    const { text, silent } = cutSilent(turn.texts.filter((part) => !sent.has(sameText(part))).join('\n\n'))
     if (reason?.kind === 'error' && text.length === 0) {
       await dropLive()
       await sendText(roomId, `❌ ${reason.error?.message ?? 'The turn failed.'}`, { plain: true, notice: true })

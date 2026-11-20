@@ -5,9 +5,9 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
+import { transcribe, transcriptNote } from '@soffits/dsh-channel-core'
 import { MAX_FILE_BYTES } from './constants.js'
 import { clip } from './text.js'
-import { transcribe, transcriptNote } from './voice.js'
 
 /** Image types the DSH attachment store takes as pictures. */
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
@@ -114,9 +114,9 @@ export async function composePrompt(event, options) {
         const media = { kind: voiceMessage ? 'voice message' : 'audio file', name, seconds: content.info?.duration > 0 ? Math.round(content.info.duration / 1000) : undefined }
         try {
           const result = await transcribe({ ...voice, path, signal })
-          lines.push(transcriptNote(media, { ...result, path }))
+          lines.push(transcriptNote(media, { ...result, path }, 'Matrix'))
         } catch (error) {
-          lines.push(transcriptNote(media, { path, error: error?.message ?? String(error) }))
+          lines.push(transcriptNote(media, { path, error: error?.message ?? String(error) }, 'Matrix'))
         }
       } else {
         lines.push(`[${content.msgtype === 'm.image' ? 'Picture' : 'File'} "${name}", saved at ${path}]`)

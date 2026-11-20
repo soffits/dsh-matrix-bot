@@ -23,9 +23,6 @@ export function spoolDir() {
   return join(dataDir(), 'spool')
 }
 
-/** A final answer ending in exactly this text posts nothing more in the room. */
-export const SILENT_REPLY = '[SILENT]'
-
 /**
  * Longest text sent as one Matrix message. Events are limited to 64 KiB
  * after encryption, and the HTML copy of the text travels in the same event.

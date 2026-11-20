@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The answer, silent marker, model, voice and sender logic now comes from `@soffits/dsh-channel-core`, the package shared with the Telegram bot, instead of a copy. While an answer streams, a trailing `[SILENT]` that is still being written after real text no longer flashes in the room.
+
 ## 0.2.1
 
 - `!model` and `!effort` switch only the room's session. They used to go through the Web UI's model picker, which also saves every pick as the default for new sessions, so a switch in one room changed the model every other new session started on. The model is still checked with the host before the switch, and `/reset` in the room still starts on the room's pick.
