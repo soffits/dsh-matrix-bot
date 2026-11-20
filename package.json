@@ -1,6 +1,6 @@
 {
   "name": "@soffits/dsh-matrix-bot",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Matrix bot for DeepSeek Harness: an end-to-end encrypted Matrix account, a private Space per person with one room per DSH session, streamed answers, commands, files, voice messages, tool approvals and agent questions.",
   "type": "module",
   "main": "./index.js",
