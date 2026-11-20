@@ -8,7 +8,8 @@
 import { basename } from 'node:path'
 import { COMMAND_PREFIXES, MSC4332_COMMAND, MSC4391_COMMAND } from './constants.js'
 import { CONTROL_HANDLERS, liveAgent, pick, sessionOf } from './controls.js'
-import { clearRoomInbox, controllerOf, listWorkspaces, recentAssistantTexts, sessionTitle, sessionsInWorkspace } from './sessions.js'
+import { controllerOf, listWorkspaces, recentAssistantTexts, sessionsInWorkspace, subagentsText } from '@soffits/dsh-channel-core'
+import { clearRoomInbox, sessionTitle } from './sessions.js'
 import { clip } from './text.js'
 import { roomTitle } from './titles.js'
 
@@ -25,7 +26,7 @@ export const COMMANDS = [
   ['status', 'Bot and session status'],
   ['current', "Show this room's session"],
   ['last', 'Show the latest answers', '1 to 5'],
-  ['agents', "List this session's helpers and their last reports"],
+  ['agents', "List this session's subagents and their last reports"],
   ['sessions', 'Browse workspaces and sessions, continue one here', 'numbers'],
   ['workspace', 'Start a new session in another workspace', 'number'],
   ['fork', 'Fork this session into a new room', 'room name'],
@@ -251,21 +252,8 @@ const HANDLERS = {
       await bridge.notice(roomId, 'This room has no session yet.')
       return
     }
-    const helpers = await bridge.helpers.list(sessionId)
-    if (helpers === undefined) {
-      await bridge.notice(roomId, 'Helpers are not available in this DSH.')
-      return
-    }
-    if (helpers.length === 0) {
-      await bridge.notice(roomId, 'This session has started no helpers.')
-      return
-    }
-    const lines = ['Helpers of this session:']
-    for (const [index, helper] of helpers.entries()) {
-      lines.push('', `${index + 1}. ${helper.running ? '⏳' : '✓'} ${helper.label} · ${age(helper.createdAt)}`)
-      lines.push(helper.report ? clip(helper.report, 400) : helper.running ? '(working)' : '(no report)')
-    }
-    await bridge.notice(roomId, lines.join('\n'))
+    const text = await subagentsText(bridge.ctx, sessionId)
+    await bridge.notice(roomId, text ?? 'Subagents are not available in this DSH.')
   },
 
   async sessions(bridge, { roomId }, args) {

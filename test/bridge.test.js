@@ -122,6 +122,25 @@ test('a streamed answer is one message edited in place, finished by the final an
   host.dispose()
 })
 
+test('subagents of a room\'s turn share one status message, edited as they finish, and !agents lists them', async () => {
+  const { host, m } = await start()
+  const roomId = await firstContact(m)
+  await m.message(roomId, 'research this')
+  const { sessionId, requestId } = host.prompts[0]
+  host.sessionEvent(sessionId, 'turn/start', { turn: 1 })
+  host.sessionEvent(sessionId, 'user/message', { source: { kind: 'user', rpcId: requestId } })
+  host.addChild(sessionId, 'child-one', 'Compare prices')
+  host.emit('subagent/start', { runId: 'run-1', id: 'child-one' })
+  await until(() => bodies(m, roomId).some((body) => /^🤖 1 subagent · 1 running\n⏳ Compare prices/u.test(body)), 'the status message', 4000)
+  const card = messages(m, roomId).find((event) => event.content.body.startsWith('🤖'))
+  host.emit('subagent/end', { runId: 'run-1', id: 'child-one', stopReason: 'completed' })
+  await until(() => messages(m, roomId).some((event) => event.content['m.relates_to']?.event_id === card.event_id && /all done\n✓ Compare prices/u.test(event.content['m.new_content']?.body ?? '')), 'the edit', 4000)
+  assert.equal(messages(m, roomId).filter((event) => event.content.body?.startsWith('🤖') && event.content['m.relates_to'] === undefined).length, 1, 'one status message')
+  await m.message(roomId, '!agents')
+  await until(() => bodies(m, roomId).some((body) => /🤖 Subagents:\n\n. Compare prices/u.test(body)), 'the list', 2000)
+  host.dispose()
+})
+
 test('a silent turn shows nothing, and a failed one says so', async () => {
   const { host, m } = await start()
   const roomId = await firstContact(m)

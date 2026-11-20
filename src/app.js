@@ -1,39 +1,21 @@
 /** Host runtime: the Matrix connection, incoming events and the wiring of the parts. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { createModelCatalog, createPrincipalTagger } from '@soffits/dsh-channel-core'
+import { createModelCatalog, createPrincipalTagger, createSpool, readLive, resolveAgent } from '@soffits/dsh-channel-core'
 import { COMMANDS, SIGIL, helpText } from './commands.js'
-import { dataDir, name, SERVICE_NAME } from './constants.js'
+import { dataDir, name, SERVICE_NAME, spoolDir } from './constants.js'
 import { createEvents } from './events.js'
-import { createHelpers } from './helpers.js'
 import { connect as realConnect } from './matrix.js'
 import { createOperations } from './operations.js'
 import { createOutbound } from './outbound.js'
 import { createPrompts } from './prompts.js'
 import { createReactions } from './reactions.js'
-import { createSession, resolveAgent } from './sessions.js'
+import { createRoomSession } from './sessions.js'
 import { createSpaces } from './spaces.js'
-import { createSpool } from './spool.js'
+import { createSubagentStatus } from './subagents.js'
 import { openState } from './state.js'
 import { createTitles } from './titles.js'
 import { createTurns } from './turns.js'
-
-/**
- * Read a Config field that may be a plain value or a volatile reference.
- * @param value - Config field.
- * @param fallback - value used when the field is absent.
- */
-export function readLive(value, fallback) {
-  if (value !== null && typeof value === 'object' && typeof value.get === 'function') {
-    try {
-      const current = value.get()
-      return current === undefined ? fallback : current
-    } catch {
-      return fallback
-    }
-  }
-  return value === undefined || value === null ? fallback : value
-}
 
 /** @returns a short message for any thrown value. */
 export function messageOf(error) {
@@ -145,7 +127,7 @@ export function createBridge(ctx, config, connect) {
     setTyping: async (roomId, typing, ms) => matrix?.setTyping(roomId, typing, ms),
   })
   const { currentTurn } = turns
-  const helpers = createHelpers({ ctx, getStore, isRunning, outbound, currentTurn, reportError })
+  const subagents = createSubagentStatus({ ctx, getStore, isRunning, outbound, currentTurn, reportError })
   const operations = createOperations({
     ctx,
     getStore,
@@ -200,7 +182,7 @@ export function createBridge(ctx, config, connect) {
     const cwd = record?.cwd ?? setting('cwd', process.cwd())
     const preset = String(setting('agentPreset', '')).trim() || undefined
     const model = store.data.picks[roomId]
-    const agent = await createSession(ctx, { cwd, preset, model, roomId, claim, warn })
+    const agent = await createRoomSession(ctx, { cwd, preset, model, roomId, claim, warn })
     const sessionId = agent.session?.id ?? agent.id
     await store.bind(roomId, { sessionId, cwd })
     await titles.apply(sessionId)
@@ -367,6 +349,7 @@ export function createBridge(ctx, config, connect) {
 
   // Requests from the `dsh-matrix` command.
   const spool = createSpool({
+    dir: spoolDir(),
     ready: () => matrix !== undefined,
     onError: (error) => reportError('spool', error),
     handle: async (request) => {
@@ -388,7 +371,6 @@ export function createBridge(ctx, config, connect) {
     currentTurn,
     ensureAgent,
     reactions,
-    helpers,
     spaces,
     notice,
     say: (roomId, text) => queueOut(roomId, () => sendText(roomId, text)),
@@ -423,8 +405,8 @@ export function createBridge(ctx, config, connect) {
   }, { global: true })
 
   ctx.on('agent/pre-step', (payload, next) => principals.preStep(payload, next), { global: true })
-  ctx.on('subagent/start', (event) => fireAndForget('helpers', () => helpers.onStart(event)), { global: true })
-  ctx.on('subagent/end', (event) => fireAndForget('helpers', () => helpers.onEnd(event)), { global: true })
+  ctx.on('subagent/start', (event) => fireAndForget('subagent status', () => subagents.onStart(event)), { global: true })
+  ctx.on('subagent/end', (event) => fireAndForget('subagent status', () => subagents.onEnd(event)), { global: true })
 
   ctx.on('settings/document-updated', (namespace) => {
     if (namespace === name) fireAndForget('settings', () => applySettings())
@@ -437,7 +419,7 @@ export function createBridge(ctx, config, connect) {
       lifetime.abort()
       if (retryTimer !== undefined) clearTimeout(retryTimer)
       prompts.cancelAll()
-      helpers.dispose()
+      subagents.dispose()
       turns.dispose()
       stopRuntime()
     }

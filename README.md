@@ -68,7 +68,7 @@ Commands start with `!`, which works in every Matrix client. `/` works too in cl
 | `!status` | Bot and session status |
 | `!current` | Show this room's session |
 | `!last [1-5]` | Show the latest answers |
-| `!agents` | List this session's helpers and their last reports |
+| `!agents` | List this session's subagents and their last reports |
 | `!sessions` | Browse workspaces and sessions, continue one here |
 | `!workspace <n>` | Start a new session in another workspace |
 | `!fork [name]` | Fork this session into a new room |

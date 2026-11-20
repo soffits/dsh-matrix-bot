@@ -10,7 +10,7 @@ import { dataDir, POST_SOURCE_KIND, REQUEST_PREFIX } from './constants.js'
 import { composePrompt, hasMedia, ownText, replyInfo, replyTargetOf } from './inbound.js'
 import { allowedEntry } from './operations.js'
 import { matrixUserPrincipal } from './sender.js'
-import { admitPrompt, hasRequest, recordMessage, unarchive } from './sessions.js'
+import { admitPrompt, hasRequest, recordMessage, unarchive } from '@soffits/dsh-channel-core'
 import { clip } from './text.js'
 
 /** @returns a short message for any thrown value. */
@@ -203,7 +203,9 @@ export function createEvents({ ctx, getStore, storeReady, getMatrix, setting, sp
       })
       const agent = await ensureAgent(roomId)
       const sessionId = agent.session?.id ?? agent.id
-      if (await unarchive(ctx, sessionId)) info(`unarchived session ${sessionId} for a message from room ${roomId}`)
+      const archived = await unarchive(ctx, sessionId)
+      if (archived === 'unarchived') info(`unarchived session ${sessionId} for a message from room ${roomId}`)
+      if (archived === 'unsupported') warn(`session ${sessionId} is archived and this DSH cannot unarchive it; the message will not be answered`)
       const running = agent.status !== undefined && agent.status !== 'idle'
       const mode = running && steer ? 'steer' : 'queue'
       const principal = matrixUserPrincipal(sender.userId, { name: sender.name, roomId, room: getStore().room(roomId)?.roomName })
@@ -212,10 +214,9 @@ export function createEvents({ ctx, getStore, storeReady, getMatrix, setting, sp
         ...(reply === undefined ? {} : { replyTo: reply }),
       }
       const metadata = { principal, ...(Object.keys(envelope).length === 0 ? {} : { envelope }) }
-      principals.remember(requestId, metadata)
-      const admitted = await admitPrompt(ctx, agent, { requestId, text: prompt.text, attachments: prompt.attachments, mode, ...metadata }, signal)
+      const admitted = await admitPrompt(ctx, agent, { requestId, text: prompt.text, attachments: prompt.attachments, mode, ...metadata }, signal, principals)
       if (!react) return
-      if (admitted) reactions.admitted(event.event_id)
+      if (admitted === 'admitted') reactions.admitted(event.event_id)
       else await reactions.release([event.event_id])
     } catch (error) {
       if (react) await reactions.release([event.event_id]).catch(() => {})

@@ -10,8 +10,8 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { dataDir } from '../src/constants.js'
-import { enqueue, waitForResult, withdraw } from '../src/spool.js'
+import { enqueue, waitForResult, withdraw } from '@soffits/dsh-channel-core'
+import { dataDir, spoolDir } from '../src/constants.js'
 
 const usage = `Usage: dsh-matrix <command> [options]
 
@@ -106,15 +106,15 @@ if (command === 'send' || command === 'react') {
   fail(`Unknown command ${command}.\n\n${usage}`)
 }
 
-const id = await enqueue(request)
+const id = await enqueue(request, spoolDir())
 if (values['no-wait'] && request.op === 'send') {
   process.stdout.write(`queued ${id}\n`)
   process.exit(0)
 }
-const result = await waitForResult(id, timeoutMs)
+const result = await waitForResult(id, timeoutMs, spoolDir())
 if (result === undefined) {
   // Only sends keep waiting for the bot; other requests are withdrawn.
-  if (request.op !== 'send') await withdraw(id)
+  if (request.op !== 'send') await withdraw(id, spoolDir())
   let state = ''
   try {
     const status = JSON.parse(readFileSync(join(dataDir(), 'status.json'), 'utf8'))

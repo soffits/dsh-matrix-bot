@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { sendPrincipal, withMetadata } from '@soffits/dsh-channel-core'
 import { POST_SOURCE_KIND } from './constants.js'
 import { finalError } from './outbound.js'
-import { recordMessage, resolveAgent } from './sessions.js'
+import { recordMessage, resolveAgent } from '@soffits/dsh-channel-core'
 import { clip } from './text.js'
 
 /** @returns the allowlist entry of a user id, or undefined. */

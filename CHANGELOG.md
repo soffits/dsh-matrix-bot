@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Session handling (finding, creating and claiming a room's session, admitting prompts once, recording notes, reading answers and titles) and the `dsh-matrix` request spool now come from `@soffits/dsh-channel-core` instead of a copy.
+- A message for an archived session that this DSH cannot unarchive is logged instead of silently going unanswered.
+- The subagent status message is the one the Telegram bot shows: subagents started by subagents are listed under their parent, each line has the model and time (refreshed once a minute while running), failures say why, and long lists fold their oldest finished lines. `!agents` shows each subagent's state, model, time and last report, also for runs before a restart. Both now say "subagent" instead of "helper".
+
 ## 0.2.2
 
 - The answer, silent marker, model, voice and sender logic now comes from `@soffits/dsh-channel-core`, the package shared with the Telegram bot, instead of a copy. While an answer streams, a trailing `[SILENT]` that is still being written after real text no longer flashes in the room.
