@@ -3,7 +3,7 @@
  * status message, edited in place as they start and finish and left as it is
  * once all of them are done. `/agents` lists a session's helpers on demand.
  */
-import { sessionModelOf } from './models.js'
+import { sessionModelOf } from '@soffits/dsh-channel-core'
 import { recentAssistantTexts } from './sessions.js'
 import { clip } from './text.js'
 

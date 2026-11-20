@@ -3,9 +3,9 @@
  * allowing a person, and its status.
  */
 import { randomUUID } from 'node:crypto'
+import { sendPrincipal, withMetadata } from '@soffits/dsh-channel-core'
 import { POST_SOURCE_KIND } from './constants.js'
 import { finalError } from './outbound.js'
-import { sendPrincipal, withPrincipal } from './sender.js'
 import { recordMessage, resolveAgent } from './sessions.js'
 import { clip } from './text.js'
 
@@ -86,7 +86,7 @@ export function createOperations({ ctx, getStore, storeReady, requireMatrix, get
         const header = `Sent to Matrix room "${record.roomName ?? roomId}"${by}`
         const content = [{ type: 'text', text: `[${header}]${text ? `\n${text}` : ''}${files.length > 0 ? `\n[Files: ${files.map((file) => file.name).join(', ')}]` : ''}` }]
         const message = { id: randomUUID(), role: 'user', content, source: { kind: POST_SOURCE_KIND, form: 'notice', summary: clip(header, 120), roomId, self } }
-        recordMessage(agent, withPrincipal(message, sendPrincipal(from)))
+        recordMessage(agent, withMetadata(message, { principal: sendPrincipal(from) }))
         recorded = true
       } catch (error) {
         recordError = messageOf(error)

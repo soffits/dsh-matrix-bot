@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
+
+- The answer, silent marker, model, voice and sender logic now comes from `@soffits/dsh-channel-core`, the package shared with the Telegram bot, instead of a copy. While an answer streams, a trailing `[SILENT]` that is still being written after real text no longer flashes in the room.
+- `@deepseek-ai/schemastery` is a peer dependency, so the bot uses the harness's own copy and an update never brings a private one.
 
 ## 0.2.1
 

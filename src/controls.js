@@ -2,7 +2,7 @@
  * Session controls from a room: model, reasoning effort, access mode and
  * context use, picked from numbered lists.
  */
-import { defaultModelOf, effortChoices, effortName, findModel, modelName, pickedSelection, selectSessionModel, sessionModelOf } from './models.js'
+import { defaultModelOf, effortChoices, effortName, findModel, modelName, pickedSelection, selectSessionModel, sessionModelOf } from '@soffits/dsh-channel-core'
 import { currentPermission, permissionOptions, setPermission } from './sessions.js'
 
 /** @returns `n` as a 1-based list index into `items`, or undefined. */

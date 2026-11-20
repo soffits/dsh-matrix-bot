@@ -1,40 +1,13 @@
 /**
- * Text going between DSH and Matrix: the answer a turn leaves, Markdown
- * rendered to the HTML Matrix clients show, splitting, and the silent marker.
+ * Text going between DSH and Matrix: Markdown rendered to the HTML Matrix
+ * clients show, local images, splitting and previews. The answer a turn
+ * leaves and the silent marker are @soffits/dsh-channel-core's.
  */
 import MarkdownIt from 'markdown-it'
-import { MAX_MESSAGE_TEXT, SILENT_REPLY } from './constants.js'
+import { MAX_MESSAGE_TEXT } from './constants.js'
 
 /** Raw HTML in answers is escaped: clients get only what Markdown makes. */
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true })
-
-/**
- * The answer one assistant message holds: the last text block of a message
- * that called no tool. Text written between tool calls is working narration,
- * not part of the answer; a message that called a tool is mid-chain.
- * @param message - an assistant message (`{ content: [...] }`).
- * @returns the answer, or '' when the message holds none.
- */
-export function messageAnswer(message) {
-  const content = Array.isArray(message?.content) ? message.content : []
-  if (content.some((block) => block?.type === 'tool-call')) return ''
-  const texts = content
-    .filter((block) => block?.type === 'text' && typeof block.text === 'string')
-    .map((block) => block.text.trim())
-    .filter((text) => text.length > 0)
-  return texts.at(-1) ?? ''
-}
-
-/**
- * Remove the silent marker from the end of an answer.
- * @param text - final answer.
- * @returns `{ text, silent }`: the rest of the text and whether the marker was there.
- */
-export function stripSilent(text) {
-  const trimmed = String(text ?? '').trim()
-  if (!trimmed.endsWith(SILENT_REPLY)) return { text: trimmed, silent: false }
-  return { text: trimmed.slice(0, -SILENT_REPLY.length).trim(), silent: true }
-}
 
 /**
  * Local image paths a Markdown answer shows inline (`![alt](/abs/path)` or a
@@ -75,16 +48,6 @@ export function localImagePaths(markdown) {
  */
 export function toHtml(text) {
   return markdown.render(String(text ?? '')).trim()
-}
-
-/**
- * Whether streamed text so far could still turn out to be only the silent
- * marker, so it is not shown yet.
- * @param text - streamed text.
- */
-export function mayBeSilent(text) {
-  const trimmed = String(text ?? '').trim()
-  return trimmed.length === 0 || SILENT_REPLY.startsWith(trimmed)
 }
 
 /**

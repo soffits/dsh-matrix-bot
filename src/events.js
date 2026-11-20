@@ -4,11 +4,12 @@
  */
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { withMetadata } from '@soffits/dsh-channel-core'
 import { parseCommand, runCommand } from './commands.js'
 import { dataDir, POST_SOURCE_KIND, REQUEST_PREFIX } from './constants.js'
 import { composePrompt, hasMedia, ownText, replyInfo, replyTargetOf } from './inbound.js'
 import { allowedEntry } from './operations.js'
-import { matrixUserPrincipal, withPrincipal } from './sender.js'
+import { matrixUserPrincipal } from './sender.js'
 import { admitPrompt, hasRequest, recordMessage, unarchive } from './sessions.js'
 import { clip } from './text.js'
 
@@ -243,7 +244,7 @@ export function createEvents({ ctx, getStore, storeReady, getMatrix, setting, sp
     const owner = target.sender === getMatrix().userId ? 'your message' : 'the message'
     const text = `[Matrix: ${sender.name} reacted ${relation.key} to ${owner} ${relation.event_id}:]\n${clip(ownText(target.content), 500)}`
     const message = { id: randomUUID(), role: 'user', content: [{ type: 'text', text }], source: { kind: POST_SOURCE_KIND, form: 'notice', summary: clip(`${sender.name} reacted ${relation.key}`, 120) } }
-    recordMessage(agent, withPrincipal(message, matrixUserPrincipal(sender.userId, { name: sender.name, roomId })))
+    recordMessage(agent, withMetadata(message, { principal: matrixUserPrincipal(sender.userId, { name: sender.name, roomId }) }))
   }
 
 

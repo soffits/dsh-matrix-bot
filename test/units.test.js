@@ -10,7 +10,7 @@ import { editContent, mediaKind, textContent } from '../src/outbound.js'
 import { parseAnswer, questionReactions, questionText } from '../src/prompts.js'
 import { childLevels, commandStates, serverOf } from '../src/spaces.js'
 import { openState } from '../src/state.js'
-import { clip, localImagePaths, mayBeSilent, messageAnswer, splitText, stripSilent, toHtml } from '../src/text.js'
+import { clip, localImagePaths, splitText, toHtml } from '../src/text.js'
 import { eventOfRequest } from '../src/turns.js'
 
 test('Markdown answers become Matrix HTML, with raw HTML escaped', () => {
@@ -32,16 +32,6 @@ test('a text message carries its Markdown as the body and HTML as the formatted 
   assert.deepEqual(edit['m.relates_to'], { rel_type: 'm.replace', event_id: '$a' })
   assert.deepEqual(mediaKind('/tmp/a.PNG'), { mimetype: 'image/png', msgtype: 'm.image' })
   assert.deepEqual(mediaKind('/tmp/a.bin'), { mimetype: 'application/octet-stream', msgtype: 'm.file' })
-})
-
-test('answers keep only text from messages without tool calls, and the silent marker is cut', () => {
-  assert.equal(messageAnswer({ content: [{ type: 'text', text: 'Looking.' }, { type: 'tool-call' }] }), '')
-  assert.equal(messageAnswer({ content: [{ type: 'text', text: 'First.' }, { type: 'text', text: 'Answer.' }] }), 'Answer.')
-  assert.deepEqual(stripSilent('Fine.\n[SILENT]'), { text: 'Fine.', silent: true })
-  assert.deepEqual(stripSilent('[SILENT]'), { text: '', silent: true })
-  assert.ok(mayBeSilent('[SIL'))
-  assert.ok(!mayBeSilent('[SILENT] but more'))
-  assert.ok(!mayBeSilent('Hello'))
 })
 
 test('long text is split on paragraph boundaries, and text without spaces (CJK) still splits', () => {
