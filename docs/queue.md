@@ -16,4 +16,4 @@
 - Room upgrades (tombstones) are not followed: the new room gets a new session only when the person invites the bot, and the old session stays bound to the old room.
 - Switching `userId` to another account keeps one `account/` directory: the new account starts from the old one's sync position, and old per-device crypto stores stay on disk.
 - A received file named `..` fails to save (and its message with it); the size limit trusts the size the sender's client declares.
-- rare: lobby session placeholder title reads "Matrix-Livia-Matrix room" (prefix and room label both say Matrix); trim one.
+- rare: lobby session placeholder title reads "Matrix-Ana-Matrix room" (prefix and room label both say Matrix); trim one.
