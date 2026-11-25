@@ -4,13 +4,13 @@
  */
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { withMetadata } from '@soffits/dsh-channel-core'
+import { withMetadata } from '@soffits/dsh-plugin-sdk/channel'
 import { parseCommand, runCommand } from './commands.js'
 import { dataDir, POST_SOURCE_KIND, REQUEST_PREFIX } from './constants.js'
 import { composePrompt, hasMedia, ownText, replyInfo, replyTargetOf } from './inbound.js'
 import { allowedEntry } from './operations.js'
 import { matrixUserPrincipal } from './sender.js'
-import { admitPrompt, hasRequest, recordMessage, unarchive } from '@soffits/dsh-channel-core'
+import { admitPrompt, hasRequest, recordMessage, unarchive } from '@soffits/dsh-plugin-sdk/channel'
 import { clip } from './text.js'
 
 /** @returns a short message for any thrown value. */

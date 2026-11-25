@@ -5,7 +5,7 @@
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
-import { transcribe, transcriptNote } from '@soffits/dsh-channel-core'
+import { transcribe, transcriptNote } from '@soffits/dsh-plugin-sdk/channel'
 import { MAX_FILE_BYTES } from './constants.js'
 import { clip } from './text.js'
 

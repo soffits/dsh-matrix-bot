@@ -1,9 +1,9 @@
 /**
  * The `matrix-user` principal: who wrote a message in a room. The shared
  * fields and the tagger that records it on prompts are in
- * @soffits/dsh-channel-core.
+ * @soffits/dsh-plugin-sdk/channel.
  */
-import { nonEmpty } from '@soffits/dsh-channel-core'
+import { nonEmpty } from '@soffits/dsh-plugin-sdk/channel'
 
 /**
  * The Matrix user who wrote a message, and where.

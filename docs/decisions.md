@@ -7,7 +7,7 @@
 - The crypto package fetches its native library in a postinstall script, so a profile that installs with pnpm must approve that package's build script (`pnpm approve-builds`). README says so.
 - Node 24 or newer: the Element fork and the crypto package both require it.
 - `markdown-it` (MIT) turns answers into the HTML subset Matrix clients render; raw HTML in an answer is escaped, not passed on.
-- The final answer and `[SILENT]`, models, voice and the sender tagger come from `@soffits/dsh-channel-core`, shared with soffits/dsh-telegram-bot so the chat bridges behave alike and a fix lands once; session handling, steering and recording sends were adapted from the Telegram bot. The sender is recorded on each prompt as `source.principal` (kind `matrix-user`, the room in `chat`), and the send time and reply as `source.envelope`; the bot adds no text or notice, and dsh-message-context renders it for the model, the same for every channel.
+- The final answer and `[SILENT]`, models, voice and the sender tagger come from `@soffits/dsh-plugin-sdk/channel`, shared with soffits/dsh-telegram-bot so the chat bridges behave alike and a fix lands once; session handling, steering and recording sends were adapted from the Telegram bot. The sender is recorded on each prompt as `source.principal` (kind `matrix-user`, the room in `chat`), and the send time and reply as `source.envelope`; the bot adds no text or notice, and dsh-message-context renders it for the model, the same for every channel.
 
 ## Login and encryption
 

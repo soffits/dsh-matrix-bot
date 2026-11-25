@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { enqueue, waitForResult, withdraw } from '@soffits/dsh-channel-core'
+import { enqueue, waitForResult, withdraw } from '@soffits/dsh-plugin-sdk/channel'
 import { dataDir, spoolDir } from '../src/constants.js'
 
 const usage = `Usage: dsh-matrix <command> [options]

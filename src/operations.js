@@ -3,10 +3,10 @@
  * allowing a person, and its status.
  */
 import { randomUUID } from 'node:crypto'
-import { sendPrincipal, withMetadata } from '@soffits/dsh-channel-core'
+import { sendPrincipal, withMetadata } from '@soffits/dsh-plugin-sdk/channel'
 import { POST_SOURCE_KIND } from './constants.js'
 import { finalError } from './outbound.js'
-import { recordMessage, resolveAgent } from '@soffits/dsh-channel-core'
+import { recordMessage, resolveAgent } from '@soffits/dsh-plugin-sdk/channel'
 import { clip } from './text.js'
 
 /** @returns the allowlist entry of a user id, or undefined. */

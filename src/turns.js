@@ -5,7 +5,7 @@
  * working reactions of its messages.
  */
 import { basename } from 'node:path'
-import { cutSilent, messageAnswer } from '@soffits/dsh-channel-core'
+import { cutSilent, messageAnswer } from '@soffits/dsh-plugin-sdk/channel'
 import { REQUEST_PREFIX, STREAM_EDIT_MS, TYPING_MS } from './constants.js'
 import { clip, localImagePaths, splitText } from './text.js'
 
