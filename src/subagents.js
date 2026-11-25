@@ -3,7 +3,7 @@
  * drawn as one plain message per room, edited in place as subagents start
  * and finish. Matrix event ids do not grow, so the card is never moved down.
  */
-import { createAgentBoards, sessionModelOf, subagentLabel } from '@soffits/dsh-channel-core'
+import { createAgentBoards, sessionModelOf, subagentLabel } from '@soffits/dsh-plugin-sdk/channel'
 
 /**
  * The status card of the rooms' subagents.

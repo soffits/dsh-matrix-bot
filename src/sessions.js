@@ -3,7 +3,7 @@
  * room's new session, its pending prompts, titles and access modes.
  */
 import { basename } from 'node:path'
-import { appendAccessMode, attachToWorkspace, claimSession, createSession, removePending, storedTitle } from '@soffits/dsh-channel-core'
+import { appendAccessMode, attachToWorkspace, claimSession, createSession, removePending, storedTitle } from '@soffits/dsh-plugin-sdk/channel'
 import { REQUEST_PREFIX } from './constants.js'
 
 /**

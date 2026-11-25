@@ -8,7 +8,7 @@
 import { basename } from 'node:path'
 import { COMMAND_PREFIXES, MSC4332_COMMAND, MSC4391_COMMAND } from './constants.js'
 import { CONTROL_HANDLERS, liveAgent, pick, sessionOf } from './controls.js'
-import { controllerOf, listWorkspaces, recentAssistantTexts, sessionsInWorkspace, subagentsText } from '@soffits/dsh-channel-core'
+import { controllerOf, listWorkspaces, recentAssistantTexts, sessionsInWorkspace, subagentsText } from '@soffits/dsh-plugin-sdk/channel'
 import { clearRoomInbox, sessionTitle } from './sessions.js'
 import { clip } from './text.js'
 import { roomTitle } from './titles.js'

@@ -3,7 +3,7 @@
  * file has no tests of its own.
  */
 import { randomUUID } from 'node:crypto'
-import { followupThroughGate, makeAgentModel, makeTitleService } from '@soffits/dsh-channel-core/testing'
+import { followupThroughGate, makeAgentModel, makeTitleService } from '@soffits/dsh-plugin-sdk/channel/testing'
 
 /** Wait until queued promise work has run. */
 export function settle(ms = 30) {

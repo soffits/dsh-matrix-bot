@@ -1,7 +1,7 @@
 /** Host runtime: the Matrix connection, incoming events and the wiring of the parts. */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { createModelCatalog, createPrincipalTagger, createSpool, readLive, resolveAgent } from '@soffits/dsh-channel-core'
+import { createModelCatalog, createPrincipalTagger, createSpool, readLive, resolveAgent } from '@soffits/dsh-plugin-sdk/channel'
 import { COMMANDS, SIGIL, helpText } from './commands.js'
 import { dataDir, name, SERVICE_NAME, spoolDir } from './constants.js'
 import { createEvents } from './events.js'

@@ -7,7 +7,7 @@
  * sign left by a turn that a Host restart cut off is removed at the next start.
  */
 import { REQUEST_PREFIX, STEER_REACTION, WORKING_REACTION } from './constants.js'
-import { inInbox } from '@soffits/dsh-channel-core'
+import { inInbox } from '@soffits/dsh-plugin-sdk/channel'
 
 /**
  * Create the working-sign tracker.

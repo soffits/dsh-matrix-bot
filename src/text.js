@@ -1,7 +1,7 @@
 /**
  * Text going between DSH and Matrix: Markdown rendered to the HTML Matrix
  * clients show, local images, splitting and previews. The answer a turn
- * leaves and the silent marker are @soffits/dsh-channel-core's.
+ * leaves and the silent marker are @soffits/dsh-plugin-sdk/channel's.
  */
 import MarkdownIt from 'markdown-it'
 import { MAX_MESSAGE_TEXT } from './constants.js'

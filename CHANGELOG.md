@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- The shared helpers now come from `@soffits/dsh-plugin-sdk` (its `/channel` part), which replaced `@soffits/dsh-channel-core`; nothing else changed.
+
 ## 0.3.0
 
 - Session handling (finding, creating and claiming a room's session, admitting prompts once, recording notes, reading answers and titles) and the `dsh-matrix` request spool now come from `@soffits/dsh-channel-core` instead of a copy.
